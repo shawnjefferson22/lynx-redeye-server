@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
         {
             perror("recvfrom failed");
             continue;
-        
+	} 
 		// print stats
 		now = time(NULL);
 		dur = now - start;
