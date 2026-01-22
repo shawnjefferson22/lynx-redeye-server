@@ -35,6 +35,21 @@ void util_dump_bytes(const uint8_t *buff, uint32_t buff_size)
 }
 
 
+/* print bytes to screen in hex format
+ */
+void print_game_packet(const uint8_t *buff, uint32_t buff_size)
+{
+    	for (int j=0; j < buff_size; j++) {
+    		printf("%02X ", buff[j]);
+    	}
+	printf(": ");
+
+	printf("Seq:%d ", (buff[1] & 0x80) ? 1 : 0);
+	printf("Type: %d\n ", (buff[1] & 0x7F));
+}
+
+
+
 /* Calculate checksum of redeye packet, return true if good, false if not
  *
  * Checksum calculation is 255 - size, message
@@ -177,7 +192,7 @@ int main(int argc, char *argv[])
 
 		// Check the checksum of the packet
 		if (!calc_checksum(buf)) {
-		  	stats.bad_checksum++;
+			stats.bad_checksum++;
 			continue;												// just discard this packet
 		}
 		else
@@ -185,9 +200,9 @@ int main(int argc, char *argv[])
 
 		// Look for client in an existing game
 		g = find_game_by_client_address(&cliaddr);
-		if (!g) {												// no game found for this client
-		   if (buf[0] == 5) {									// this is a logon packet
-				gid = (uint16_t) (buf[4] + (buf[5] * 256));		// extract game id
+		if (!g) {								// no game found for this client
+		   if (buf[0] == 5) {							// this is a logon packet
+			gid = (uint16_t) (buf[4] + (buf[5] * 256));			// extract game id
 
 		     	g = find_game_by_id(gid);						// find a game matching id that's in logon phase
 		     	// join a game in progress if in logon mode and not at max players already
@@ -195,36 +210,40 @@ int main(int argc, char *argv[])
 		       		join_game(g, &cliaddr);
 		       		printf("Client %s:%d not found, joining game %04X %s\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name);
 	        	}
-				// create a new game
-				else {
-		   			g = create_new_game(gid, &cliaddr);
-		   			printf("Client %s:%d not found, creating game id: %04X %s, max players: %d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name, g->max_players);
-					continue;									// back to the beginning of loop, no other clients to send this to yet
-	       		}
-		   	}
+			// create a new game
 			else {
-				// client not found in any game, and not a logon packet, just discard it!
+		   		g = create_new_game(gid, &cliaddr);
+		   		printf("Client %s:%d not found, creating game id: %04X %s, max players: %d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name, g->max_players);
+				continue;									// back to the beginning of loop, no other clients to send this to yet
+	       		}
+		   }
+		   else {
+			// client not found in any game, and not a logon packet, just discard it!
 	      		printf("Client %s:%d not found in any game, and not a logon packet! PKT: \n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
 	      		util_dump_bytes(buf, recvfrom_ret);
-	 			printf("\n");
+	 		printf("\n");
 		    	continue;										// back to beginning of loop, discard the packet
 			}
 		}
 		//printf("Client %s:%d found in game %d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), g->game_id);
 
 		// update some client details
-		pnum = find_client_in_game(g, &cliaddr);								// find the player number in this game of sender
-		if (pnum == 255)														// client not found in game (something weird happened)
-			continue;															// back to beginning of loop, discard this packet
+		pnum = find_client_in_game(g, &cliaddr);				// find the player number in this game of sender
+		if (pnum == 255)							// client not found in game (something weird happened)
+			continue;							// back to beginning of loop, discard this packet
 
 		time_t t = time(NULL);
-		g->client[pnum].last_heard = t;											// record last hard time
-	    //memset(g->client[pnum].last_msg_recv, 0, BUF_SIZE);						// clear last msg recv
-	    //memcpy(g->client[pnum].last_msg_recv, buf, recvfrom_ret);				// record last msg recv
+		g->client[pnum].last_heard = t;						// record last hard time
+	    	//memset(g->client[pnum].last_msg_recv, 0, BUF_SIZE);			// clear last msg recv
+	    	//memcpy(g->client[pnum].last_msg_recv, buf, recvfrom_ret);		// record last msg recv
+
+		if (g->logon == 0) {
+			print_game_packet(buf, buf[0]);
+		}
 
 		// Check if the logon phase is ending
 		if (g->logon && (buf[0] == 5) && (buf[1] == 2)) {			// game is logon phase, packet is a logon packet (size 5), and message id is logon ending
-		  	g->logon = 0;											// this game is ending for logon, block new players
+		  	g->logon = 0;							// this game is ending for logon, block new players
 			printf("Logon ending for game %04X %s, players: %d\n", g->game_id, *g->name, g->num_players);
 		}
 

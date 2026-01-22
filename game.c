@@ -104,15 +104,15 @@ GAME_T *find_game_by_client_address(const struct sockaddr_in* addr)
     return(NULL);
 
   while (g) {
-	    // search all players in game
-      for (i=0; i < g->num_players; i++) {
-	      if (addr->sin_family == g->client[i].client_addr.sin_family &&
-            addr->sin_port == g->client[i].client_addr.sin_port &&
-            addr->sin_addr.s_addr == g->client[i].client_addr.sin_addr.s_addr) {
+	// search all players in game
+      	for (i=0; i < g->num_players; i++) {
+	    if (addr->sin_family == g->client[i].client_addr.sin_family &&
+            	addr->sin_port == g->client[i].client_addr.sin_port &&
+            	addr->sin_addr.s_addr == g->client[i].client_addr.sin_addr.s_addr) {
 		        //printf("find_game_by_client, client found in game %d\n", g->game_id);
             return(g);
   	    }
-	    }
+	}
 
 	    g = g->next;				// try next game
   }
