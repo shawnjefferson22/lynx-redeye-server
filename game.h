@@ -12,8 +12,8 @@ typedef struct CLIENT_T
 {
     struct sockaddr_in client_addr;
     time_t last_heard;
-    uint8_t last_msg_recv[BUF_SIZE];
-    uint8_t last_msg_sent[BUF_SIZE];
+    //uint8_t last_msg_recv[BUF_SIZE];
+    //uint8_t last_msg_sent[BUF_SIZE];
 } CLIENT_T;
 
 typedef struct STATS_T
@@ -27,7 +27,6 @@ typedef struct STATS_T
 
 typedef struct GAME_STATE_T
 {
-	//uint8_t cur_seq;
 	uint8_t plr_data_recv[2][MAX_PLAYERS];
 	uint8_t seq_plr_data[2][MAX_PLAYERS][BUF_SIZE];
 } GAME_STATE_T;
@@ -41,8 +40,11 @@ typedef struct GAME_T
   char **name;					        // pointer to game name in games list
   CLIENT_T client[MAX_PLAYERS]; // client list, up to 16
   GAME_STATE_T state;			      // game state
+  uint64_t game_start;          // time of game start
+  uint64_t rounds;              // number of rounds (sequences)
   uint64_t round_start;			    // round start time (sequence)
   uint64_t last_round_time;		  // last round time (ms)
+  uint64_t avg_round_time;      // average round time
   struct GAME_T *next;         	// point to next game
 } GAME_T;
 
@@ -62,13 +64,16 @@ GAME_T *find_game_by_client_address(const struct sockaddr_in* addr);
 GAME_T *find_game_by_id(uint16_t id);
 uint8_t find_client_in_game(GAME_T *game, struct sockaddr_in* addr);
 uint8_t find_game_in_game_list(uint16_t gid);
+
 GAME_T *create_new_game(uint16_t game_id, struct sockaddr_in* addr);
 void join_game(GAME_T *game, struct sockaddr_in* addr);
-uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *packet, uint8_t psize);
-uint8_t resend_data_to_clients(struct GAME_T *game, uint8_t req_player, uint8_t *packet, uint8_t psize);
 void handle_client_timeout();
 
+void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, uint32_t buff_size);
 void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, uint32_t buff_size);
+
+uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *packet, uint8_t psize);
+uint8_t resend_data_to_clients(struct GAME_T *game, uint8_t req_player, uint8_t *packet, uint8_t psize);
 
 // defined in main.c
 extern int sockfd;				// Socket File Descriptor

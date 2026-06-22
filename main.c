@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
 
 			// *** DEBUGGING ***
     		#ifdef DEBUG
-	    	ui_log("DEBUG Received packet from %s:%d", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
+	    	ui_log("DEBUG Received packet from %s:%d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
         	util_dump_bytes(buf, recvfrom_ret);
 			#endif
 			
@@ -205,19 +205,19 @@ int main(int argc, char *argv[])
 			g = find_game_by_client_address(&cliaddr);
 			if (!g) {												// no game found for this client
 		   		if (buf[0] == 5) {									// this is a logon packet
-			gid = (uint16_t) (buf[4] + (buf[5] * 256));			// extract game id
+					gid = (uint16_t) (buf[4] + (buf[5] * 256));			// extract game id
 
-		     	g = find_game_by_id(gid);						// find a game matching id that's in logon phase
-		     	// join a game in progress if in logon mode and not at max players already
-		     	if (g && (g->logon) && (g->num_players != g->max_players)) {		// found game in logon phase, with free slots for players
-		       		join_game(g, &cliaddr);
-		       		ui_log("Client %s:%d not found, joining game %04X %s\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name);
-	        	}
-			// create a new game
-			else {
-		   		g = create_new_game(gid, &cliaddr);
-		   		ui_log("Client %s:%d not found, creating game id: %04X %s, max players: %d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name, g->max_players);
-				continue;									// back to the beginning of loop, no other clients to send this to yet
+		     		g = find_game_by_id(gid);						// find a game matching id that's in logon phase
+		     		// join a game in progress if in logon mode and not at max players already
+		     		if (g && (g->logon) && (g->num_players != g->max_players)) {		// found game in logon phase, with free slots for players
+		       			join_game(g, &cliaddr);
+		       			ui_log("Client %s:%d not found, joining game %04X %s\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name);
+	        		}
+				// create a new game
+				else {
+		   			g = create_new_game(gid, &cliaddr);
+		   			ui_log("Client %s:%d not found, creating game id: %04X %s, max players: %d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name, g->max_players);
+					continue;									// back to the beginning of loop, no other clients to send this to yet
 	       		}
 		   }
 		   		else {
@@ -272,25 +272,13 @@ int main(int argc, char *argv[])
 				print_game_packet(buf, buf[0]+2);
 				#endif
 
-				if (monitor_mode) {
-					if (buf[3] > 1)
-						g->num_players = buf[3]-1;
-					else
-						g->num_players = 1;
-				}
+				process_logon_packet(g, pnum, buf, buf[0]);
 
-				// Check if the logon phase is ending
-				if (g->logon && (buf[0] == 5) && (buf[1] == 2) && (buf[2] == 1)) {		// game is logon phase, packet is a logon packet (size 5), and message id is logon ending
-		  			g->logon = 0;														// this game is ending for logon, block new players
-
-					ui_log("GAME %04X %s --> Logon ended, players: %d \n", g->game_id, *g->name, g->num_players);
-				}
-
-			/*******************/
-			/* Send to Players */
-			/*******************/
-			if ((g->num_players > 1) && !monitor_mode)	{				// don't even bother if only one player, or in monitor mode
-				send_to_other_clients(g, pnum, buf, recvfrom_ret);		// mirror this packet to other clients in game
+				/*******************/
+				/* Send to Players */
+				/*******************/
+				if ((g->num_players > 1) && !monitor_mode)	{				// don't even bother if only one player, or in monitor mode
+					send_to_other_clients(g, pnum, buf, recvfrom_ret);		// mirror this packet to other clients in game
 			}
 		}
 		}

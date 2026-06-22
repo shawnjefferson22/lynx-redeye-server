@@ -203,7 +203,7 @@ void draw_games()
 							  //          1	        2         3         4         5         6         7
 							  //01234567890123456789012345678901234567890123456789012345678901234567890123456789
 							  //9999 NAME NAME NAME NAME NAME NAME NAME NAMEN PLRS LOGON SEQ 12345678
-    mvwprintw(win_games, 1, 2, "ID  NAME                                     PLRS STATE PLR-DAT0 PLR-DAT1 SEQTIME");
+    mvwprintw(win_games, 1, 2, "ID  NAME                                     PLRS STATE PLR-DAT0 PLR-DAT1 SEQTIME ROUNDS AVGSEQTIME");
     wattroff(win_games, A_BOLD);
 
     // testing
@@ -214,29 +214,17 @@ void draw_games()
 
     while(g && row < GAMES_H - 1)
     {
-        mvwprintw(win_games, row++, 1, "%04X %-40s  %-3d %-5s %1d%1d%1d%1d%1d%1d%1d%1d %1d%1d%1d%1d%1d%1d%1d%1d %lu ms", g->game_id, *g->name,
+        mvwprintw(win_games, row++, 1, "%04X %-40s  %-3d %-5s %1d%1d%1d%1d%1d%1d%1d%1d %1d%1d%1d%1d%1d%1d%1d%1d %4lu ms  %-6lu %4lu ms", g->game_id, *g->name,
         		  g->num_players, (g->logon ? "LOGON" : "GAME"),
         		  g->state.plr_data_recv[0][7], g->state.plr_data_recv[0][6], g->state.plr_data_recv[0][5], g->state.plr_data_recv[0][4],
         		  g->state.plr_data_recv[0][3], g->state.plr_data_recv[0][2], g->state.plr_data_recv[0][1], g->state.plr_data_recv[0][0],
         		  g->state.plr_data_recv[1][7], g->state.plr_data_recv[1][6], g->state.plr_data_recv[1][5], g->state.plr_data_recv[1][4],
         		  g->state.plr_data_recv[1][3], g->state.plr_data_recv[1][2], g->state.plr_data_recv[1][1], g->state.plr_data_recv[1][0],
-        		  g->last_round_time);
+        		  g->last_round_time, g->rounds, g->avg_round_time);
         g = g->next;
     }
 }
 
-
-/* print bytes to screen in hex format
- */
-/*void util_dump_bytes(const uint8_t *buff, uint32_t buff_size)
-{
-    int bytes_per_line = 16;
-    for (int j=0; j < buff_size; j += bytes_per_line)
-    {
-        for (int k = 0; (k + j) < buff_size && k < bytes_per_line; k++)
-            ui_log("%02X ", buff[k + j]);
-    }
-}*/
 
 void util_dump_bytes(const uint8_t *buff, uint32_t buff_size)
 {
@@ -256,31 +244,12 @@ void util_dump_bytes(const uint8_t *buff, uint32_t buff_size)
 }
 
 
-
-/* print bytes to screen in hex format
- */
-/*void print_game_packet(const uint8_t *buff, uint32_t buff_size)
-{
-	uint8_t msg;
-
-
-    for (int j=0; j < buff_size; j++) {
-    	ui_log("%02X ", buff[j]);
-    }
-	ui_log(": ");
-
-	ui_log(" - ");
-	ui_log("Seq: %d ", (buff[1] & 0x80) ? 1 : 0);
-	ui_log("Plr: %d ", (buff[1] & 0x78) >> 3);
-	ui_log("Msg: %d\n", (buff[1] & 0x07);
-}*/
-
 void print_game_packet(const uint8_t *buff, uint32_t buff_size)
 {
     char line[256];
     int offset = 0;
 
-    offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG PKT: ");
+    offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG GAME PKT: ");
     // hex dump (single line)
     for (int j = 0; j < buff_size && offset < sizeof(line); j++) {
         offset += snprintf(line + offset, sizeof(line) - offset, "%02X ", buff[j]);
@@ -293,6 +262,29 @@ void print_game_packet(const uint8_t *buff, uint32_t buff_size)
 
     offset += snprintf(line + offset, sizeof(line) - offset, "- Seq=%d Plr=%d Msg=%d\n", seq, plr, msg);
 
+    ui_log("%s", line);
+}
+
+
+void print_logon_packet(const uint8_t *buff, uint32_t buff_size)
+{
+    char line[256];
+    int offset = 0;
+
+    offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG LOGON PKT: ");
+    // hex dump (single line)
+    for (int j = 0; j < buff_size && offset < sizeof(line); j++) {
+        offset += snprintf(line + offset, sizeof(line) - offset, "%02X ", buff[j]);
+    }
+
+    // decode fields
+    uint8_t msg = buff[1];
+    uint8_t countdown = buff[2];
+    uint8_t plrs = buff[3] - 1;
+    // buff[4] + [5] contain game id, already extracted
+
+
+    offset += snprintf(line + offset, sizeof(line) - offset, "- Msg=%02X Plrs=%d countdown=%d\n", msg, plrs, countdown);
     ui_log("%s", line);
 }
 

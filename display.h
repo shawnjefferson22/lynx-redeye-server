@@ -17,6 +17,7 @@ extern void draw_games();
 // logging functions
 void util_dump_bytes(const uint8_t *buff, uint32_t buff_size);
 void print_game_packet(const uint8_t *buff, uint32_t buff_size);
+void print_logon_packet(const uint8_t *buff, uint32_t buff_size);
 void handle_stats_print();
 
 #endif

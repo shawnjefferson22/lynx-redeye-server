@@ -41,12 +41,14 @@ GAME_LIST_T game_list[] = {
 	{0xB0B0, 2, "NFL Football"},
 	{0xBABE, 2, "Raiden"},
 	{0xDAD0, 4, "Tournament Cyberball"},
+	// Remapped from 0xFFFF in Fujinet Firmware
 	{0xE001, 2, "Double Dragon"},									// remapped from 0xFFFF games
 	{0xE002, 2, "European Soccer"},
 	{0xE003, 2, "Lynx Casino"},
 	{0xE004, 2, "Pit Fighter"},
 	{0xE005, 2, "Relief Pitcher"},
 	{0xE006, 4, "Super Off-Road"},
+	// Non-Redeye Games
 	{0xE101, 4, "Awesome Golf"},									// games that don't use redeye (shouldn't ever see these)
 	{0xE102, 4, "Battlezone 2000"},									// including for completeness as these IDs are used in the
 	{0xE103, 4, "California Games"},								// Fujinet firmware
@@ -58,7 +60,8 @@ GAME_LIST_T game_list[] = {
 	{0xE109, 2, "Lynx Othello"},
 	{0xE10A, 4, "Malibu Bikini Volleyball"},
 	{0xE10B, 2, "Ponx"},
-	{0xFFFF, 0, "Not Used"}
+	// Generic ID used in some games (see remap above)
+	{0xFFFF, 0, "Generic game ID"}
 };
 
 struct GAME_T *games;                   // games being played list
@@ -230,8 +233,8 @@ GAME_T *create_new_game(uint16_t game_id, struct sockaddr_in* addr)
   }
 
   newgame->client[0].last_heard = time(NULL);
-  memset(newgame->client[0].last_msg_sent, 0, BUF_SIZE);
-  memset(newgame->client[0].last_msg_recv, 0, BUF_SIZE);
+  //memset(newgame->client[0].last_msg_sent, 0, BUF_SIZE);
+  //memset(newgame->client[0].last_msg_recv, 0, BUF_SIZE);
   memcpy((void *) &(newgame->client[0].client_addr), (void *) addr, sizeof(struct sockaddr_in));
 
 	// clear the game state
@@ -244,8 +247,12 @@ GAME_T *create_new_game(uint16_t game_id, struct sockaddr_in* addr)
 		memset(newgame->state.seq_plr_data[1][i], 0, BUF_SIZE);
 	}
 
+	// reset timing stats
+	newgame->rounds = 0;
+	newgame->game_start = 0;
 	newgame->round_start = 0;
 	newgame->last_round_time = 0;
+	newgame->avg_round_time = 0;
 
   	/* DEBUGGING */
   	#ifdef DEBUG
@@ -273,8 +280,8 @@ void join_game(GAME_T *game, struct sockaddr_in* addr)
   if (game->logon) {
     	memcpy((void *) &(game->client[game->num_players].client_addr), (void *) addr, sizeof(struct sockaddr_in));
 		game->client[game->num_players].last_heard = time(NULL);
-    	memset(game->client[0].last_msg_sent, 0, BUF_SIZE);
-    	memset(game->client[0].last_msg_recv, 0, BUF_SIZE);
+    	//memset(game->client[0].last_msg_sent, 0, BUF_SIZE);
+    	//memset(game->client[0].last_msg_recv, 0, BUF_SIZE);
 
     	game->num_players++;
   }
@@ -309,8 +316,8 @@ uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t
 		#endif
 
       	// update the last message sent to this client
-	    memset(game->client[i].last_msg_sent, 0, BUF_SIZE);
-	    memcpy(game->client[i].last_msg_sent, packet, psize);
+	    //memset(game->client[i].last_msg_sent, 0, BUF_SIZE);
+	    //memcpy(game->client[i].last_msg_sent, packet, psize);
 
 	    if (sendto_ret < 0) {
         	perror("sendto failed");
@@ -403,6 +410,65 @@ bool check_data_recv(struct GAME_T *game)
 }
 
 
+/* process_logon_packet
+ *
+ * 
+*/
+void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, uint32_t buff_size)
+{
+	uint8_t msg, plrs, countdown;
+
+
+	// Were not in the logon phase
+	if (!game->logon)
+		return;
+
+	// Doesn't look like a logon packet		
+	if (buf[0] != 5) {
+		ui_log("GAME %04X %s --> ERROR not a logon packet\n", game->game_id, game->name);
+	}
+
+	#ifdef DEBUG
+	print_logon_packet(buf, buf[0]+2);
+	#endif
+
+	// Extract number of players logged in
+	msg = buf[1];
+	countdown = buf[2];
+	plrs = buf[3] - 1;
+	// buf[4] + buf[5] contains game id, already extracted
+	
+	// Is the game ending?
+	switch (msg) {
+		case 2:					// game is starting
+			ui_log("GAME %04X %s --> game starting in %d\n", game->game_id, *game->name, countdown);
+			if (countdown == 1) {
+				game->logon = 0;
+				ui_log("GAME %04X %s --> Logon ended, players: %d \n", game->game_id, *game->name, game->num_players);
+
+				game->game_start = get_time_ms();
+				game->round_start = get_time_ms();
+			}
+			break;
+		
+		case 0:
+			if (game->num_players < plrs) {
+				ui_log("GAME %04X %s --> Logon new player %d\n", game->game_id, *game->name, countdown);
+				
+				// increase number of players
+				if (monitor_mode) {
+					if (buf[3] > 1)
+						game->num_players = plrs;
+					else
+						game->num_players = 1;
+				}
+			}
+			break;
+	}
+
+}
+
+
 /* process_game_packet
  *
  * Process an in-game packet and update the game state. We could do retransmissions here if we have the data
@@ -419,6 +485,14 @@ void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, 
 
 	// What msg type is it?
 	switch(msg) {
+		case 0:
+			if (buf[0] == 5) {		// looks like we're back in logon, pressed restart?
+				game->logon = 1;
+				game->rounds = 0;
+				game->avg_round_time = 0;
+				ui_log("GAME %04X %s --> RESTART logon packet received, back in logon mode\n", game->game_id, *game->name);
+			}
+			break;
 		case 3:		// Data packet
 			game->state.plr_data_recv[seq][plr] = 1;
 			memcpy(game->state.seq_plr_data[seq][plr], buf, buff_size);
@@ -456,9 +530,12 @@ void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, 
 		}
 
 		// measure sequence time
-		if (game->round_start)
+		game->rounds++;
+		if (game->round_start) {
 			game->last_round_time = (get_time_ms() - game->round_start);
-		game->round_start = get_time_ms();
+			game->avg_round_time = (get_time_ms() - game->game_start) / game->rounds;
+			game->round_start = get_time_ms();
+		}
 
 		ui_log("GAME %04X %s --> SEQ Full sequence starting, last sequence time: %lu ms\n", game->game_id, *game->name, game->last_round_time);
 	}
@@ -501,12 +578,12 @@ uint8_t resend_data_to_clients(struct GAME_T *game, uint8_t req_player, uint8_t 
 		#endif
 
       	// update the last message sent to this client (do we need this?)
-	    memset(game->client[i].last_msg_sent, 0, BUF_SIZE);
-	    memcpy(game->client[i].last_msg_sent, packet, psize);
+	    //memset(game->client[i].last_msg_sent, 0, BUF_SIZE);
+	    //memcpy(game->client[i].last_msg_sent, packet, psize);
 
 	    if (sendto_ret < 0) {
         	perror("sendto failed");
-      }
+      	}
     }
   }
 
