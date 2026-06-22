@@ -18,7 +18,7 @@
 /* Game List */
 GAME_LIST_T game_list[] = {
 	{0x0000, 2, "Bill and Ted's Excellent Adventure"},				// standard redeye games
-	{0x0001, 4, "Gauntlet: The Third Encounter"},
+	{0x0001, 4, "Gauntlet: The Third Encounter"},					// seems to switch baud rates in game
 	{0x0002, 4, "Zalor Mercenary"},
 	{0x0004, 4, "Xenophobe"},
 	{0x0005, 8, "Todd's Adventure in Slime World"},
@@ -40,7 +40,7 @@ GAME_LIST_T game_list[] = {
 	{0x7000, 6, "Battle Wheels"},
 	{0xB0B0, 2, "NFL Football"},
 	{0xBABE, 2, "Raiden"},
-	{0xDAD0, 4, "Tournament Cyberball"},
+	{0xDAD0, 4, "Tournament Cyberball"},							// may also switch baud rate?
 	// Remapped from 0xFFFF in Fujinet Firmware
 	{0xE001, 2, "Double Dragon"},									// remapped from 0xFFFF games
 	{0xE002, 2, "European Soccer"},
