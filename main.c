@@ -5,49 +5,22 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include "game.h"
+#include "display.h"
 
 
-#define VERSION_STR 	"1.0"
-#define STATS_PRINT_DUR		10
-
-
-void util_dump_bytes(const uint8_t *buff, uint32_t buff_size);
-uint8_t calc_checksum(uint8_t *buf);
+#define VERSION_STR 		"1.1"
 
 int sockfd;				// Socket File Descriptor
-STATS_T stats;
+bool monitor_mode = false;
+FILE *fp;
 
-
-/* print bytes to screen in hex format
- */
-void util_dump_bytes(const uint8_t *buff, uint32_t buff_size)
-{
-    int bytes_per_line = 16;
-    for (int j=0; j < buff_size; j += bytes_per_line)
-    {
-        for (int k = 0; (k + j) < buff_size && k < bytes_per_line; k++)
-            printf("%02X ", buff[k + j]);
-    }
-}
-
-
-/* print bytes to screen in hex format
- */
-void print_game_packet(const uint8_t *buff, uint32_t buff_size)
-{
-    	for (int j=0; j < buff_size; j++) {
-    		printf("%02X ", buff[j]);
-    	}
-	printf(": ");
-
-	printf("Seq:%d ", (buff[1] & 0x80) ? 1 : 0);
-	printf("Type: %d\n ", (buff[1] & 0x7F));
-}
-
+uint8_t calc_checksum(uint8_t *buf);
 
 
 /* Calculate checksum of redeye packet, return true if good, false if not
@@ -69,44 +42,70 @@ uint8_t calc_checksum(uint8_t *buf)
 	if ((uint8_t) ck == buf[sz+1])
 	  return 1;
 	else {
-	 //printf("packet failed checksum! %02X %d %02X PKT: ", (ck & 0xFF), sz, buf[sz+1]);
-	 //util_dump_bytes(buf, sz+2);
-	 //printf("\n");
+		#ifdef DEBUG
+	 	ui_log("DEBUG - packet failed checksum! %02X %d %02X", (ck & 0xFF), sz, buf[sz+1]);
+	 	util_dump_bytes(buf, sz+2);
+	 	#endif
 
 	 return 0;
     }
 }
 
+/*
+ * Ugly hack for case if UDP stream is concatenating packets
+*/
+bool check_buffer_for_more(uint8_t *buf, uint8_t bufsize)
+{
+	if (bufsize > buf[0]+2) {
+		#ifdef DEBUG
+		ui_log("DEBUG - found more buf[0]:%d buf[0]+2:%d\n", buf[0], buf[(buf[0]+2)]);
+		#endif
+		
+		memmove(&buf[0], &buf[(buf[0]+2)], buf[buf[0]+1]);
+		
+		#ifdef DEBUG
+		util_dump_bytes(buf, buf[0]+2);
+		#endif
 
-//void print_stats(void)
-//{
-//	printf("*** Global Stats - malformed: %ld, bad checksum: %ld, good checksum: %ld\n", stats.malformed, stats.bad_checksum, stats.good_checksum);
-//}
+		if (buf[0] == 0)			// fix case of no more real data
+			return(false);
+		else
+			return(true);
+	}
+
+	return(false);
+}
 
 
 int main(int argc, char *argv[])
 {
-    
 	uint8_t buf[BUF_SIZE];				// packet buffer
 	struct GAME_T *g;
     uint8_t pnum;						// player number
     uint16_t gid;						// game id
-	time_t start, now, dur;
-	float mal_percent;
-	float bad_percent;
-	bool stats_printed = true;
 
+
+	//printf("Fujinet Lynx Redeye Server, v%s\n\n", VERSION_STR);
 
     // Handle arguments
     if (argc < 2)
     {
-        fprintf(stderr, "Usage: %s <port> [-v/-vv]\n", argv[0]);
+        fprintf(stderr, "Usage: %s <port> [-monitor]\n", argv[0]);
         return 1;
     }
     int port = atoi(argv[1]);
 
-	printf("Fujinet Lynx Redeye Server, v%s\n\n", VERSION_STR);
+    // monitor mode?
+    if (argc == 3) {
+		if (strcmp(argv[2], "-monitor")	== 0) {
+			monitor_mode = true;
+		}
+	}
 
+	// log file for monitor mode
+	if (monitor_mode)
+		fp = fopen("reserver-monitor.log", "w");
+		
     // Create socket
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
@@ -127,8 +126,14 @@ int main(int argc, char *argv[])
         perror("bind failed");
         return 1;
     }
-	printf("Listening for connections on port %d...\n\n", port);
 
+	// print startup status
+	ui_log("Listening for connections on port %d.\n", port);
+	if (monitor_mode)
+		ui_log("Running in monitor mode.\n");
+
+	display_init();
+	ui_refresh();
 
 	// Initialize some variables
     games = NULL;
@@ -139,122 +144,169 @@ int main(int argc, char *argv[])
 	stats.bad_checksum = stats.last_bad_checksum = 0;
 	stats.good_checksum = 0;
 
-	// Main game service loop
+	/* Main game service loop */
     while (1) {
-        memset(buf, 0, BUF_SIZE);			// clear it
+		fd_set readfds;
+		FD_ZERO(&readfds);
+		FD_SET(sockfd, &readfds);
 
-        struct sockaddr_in cliaddr;
-        socklen_t clilen = sizeof(cliaddr);
+		struct timeval tv;
+		tv.tv_sec = 0;
+		tv.tv_usec = 100000;
 
-		// Get UDP packet
-        int recvfrom_ret = recvfrom(sockfd, buf, BUF_SIZE, 0, (struct sockaddr*)&cliaddr, &clilen);
-        if (recvfrom_ret < 0)
-        {
-            perror("recvfrom failed");
-            continue;
-	} 
-		// print stats
-		now = time(NULL);
-		dur = now - start;
-		//printf("time %ld %ld %ld\n", start, now, dur);
-		if ((dur % STATS_PRINT_DUR) == 0) {
-			if (!stats_printed) {
-				mal_percent = ((float) stats.malformed / (float) (stats.good_checksum+stats.malformed+stats.bad_checksum)) * 100;
-				bad_percent = ((float)stats.bad_checksum / (float) (stats.good_checksum+stats.malformed+stats.bad_checksum)) * 100;
-				printf("*** Global Stats - good: %ld, malformed: %ld %.2f%% ∆:%ld, bad checksum: %ld %.2f%% ∆:%ld\n", stats.good_checksum, stats.malformed, mal_percent,
-						(stats.malformed - stats.last_malformed), stats.bad_checksum, bad_percent, (stats.bad_checksum - stats.last_bad_checksum));
-				stats.last_malformed = stats.malformed;
-			    stats.last_bad_checksum = stats.bad_checksum;
-				stats_printed = true;
+		int ret = select(sockfd+1, &readfds, NULL, NULL, &tv);
+		if (ret < 0) {
+			if (errno == EINTR)
+				continue;
+
+			perror("select failed");
+			break;
+		}
+
+		if (FD_ISSET(sockfd, &readfds)) {
+        	memset(buf, 0, BUF_SIZE);			// clear the buffer
+
+        	struct sockaddr_in cliaddr;
+        	socklen_t clilen = sizeof(cliaddr);
+
+			int recvfrom_ret = recvfrom(sockfd, buf, BUF_SIZE, 0, (struct sockaddr*)&cliaddr, &clilen);
+			if (recvfrom_ret < 0) {
+				perror("recvfrom failed");
+				continue;
 			}
-		}
-		else {
-			stats_printed = false;
-		}
-		
-		// prune timed out clients and dead games
-		handle_client_timeout();
 
-		// *** DEBUGGING ***
-    #ifdef DEBUG
-	    printf("Received from %s:%d ", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
-        printf("PKT: ");
-        util_dump_bytes(buf, recvfrom_ret);
-        printf("\n");
-	#endif
+			// *** DEBUGGING ***
+    		#ifdef DEBUG
+	    	ui_log("DEBUG Received packet from %s:%d", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
+        	util_dump_bytes(buf, recvfrom_ret);
+			#endif
+			
+			// sanity check on the packet length (more than 16 bytes? or less than 3 bytes?)
+			if ((buf[0] > MAX_PKT_SIZE) || ((recvfrom_ret < 3) || (recvfrom_ret > MAX_PKT_SIZE))) {
+				#ifdef DEBUG
+				ui_log("DEBUG Discarding malformed packet, size %d\n", buf[0]);
+				#endif
+				stats.malformed++;
+				continue;
+			}
 
-		// sanity check on the packet length
-		if ((buf[0] > 16) || ((recvfrom_ret < 3) || (recvfrom_ret > 16))) {
-			//printf("Discarding malformed packet, size %d\n", buf[0]);
-			stats.malformed++;
-			continue;
-		}
+			// Check the checksum of the packet
+			if (!calc_checksum(buf)) {
+				stats.bad_checksum++;
+				continue;												// just discard this packet
+			}
+			else
+				stats.good_checksum++;
 
-		// Check the checksum of the packet
-		if (!calc_checksum(buf)) {
-			stats.bad_checksum++;
-			continue;												// just discard this packet
-		}
-		else
-			stats.good_checksum++;
-
-		// Look for client in an existing game
-		g = find_game_by_client_address(&cliaddr);
-		if (!g) {								// no game found for this client
-		   if (buf[0] == 5) {							// this is a logon packet
+			/***************/
+			/* Game Lookup */
+			/***************/
+			// Look for client in an existing game
+			g = find_game_by_client_address(&cliaddr);
+			if (!g) {												// no game found for this client
+		   		if (buf[0] == 5) {									// this is a logon packet
 			gid = (uint16_t) (buf[4] + (buf[5] * 256));			// extract game id
 
 		     	g = find_game_by_id(gid);						// find a game matching id that's in logon phase
 		     	// join a game in progress if in logon mode and not at max players already
 		     	if (g && (g->logon) && (g->num_players != g->max_players)) {		// found game in logon phase, with free slots for players
 		       		join_game(g, &cliaddr);
-		       		printf("Client %s:%d not found, joining game %04X %s\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name);
+		       		ui_log("Client %s:%d not found, joining game %04X %s\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name);
 	        	}
 			// create a new game
 			else {
 		   		g = create_new_game(gid, &cliaddr);
-		   		printf("Client %s:%d not found, creating game id: %04X %s, max players: %d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name, g->max_players);
+		   		ui_log("Client %s:%d not found, creating game id: %04X %s, max players: %d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), gid, *g->name, g->max_players);
 				continue;									// back to the beginning of loop, no other clients to send this to yet
 	       		}
 		   }
-		   else {
-			// client not found in any game, and not a logon packet, just discard it!
-	      		printf("Client %s:%d not found in any game, and not a logon packet! PKT: \n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
-	      		util_dump_bytes(buf, recvfrom_ret);
-	 		printf("\n");
-		    	continue;										// back to beginning of loop, discard the packet
+		   		else {
+					// client not found in any game, and not a logon packet, just discard it!
+	      			ui_log("Client %s:%d not found in any game, and not a logon packet!\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
+	      			#ifdef DEBUG
+	      			util_dump_bytes(buf, recvfrom_ret);
+	      			#endif
+		    		continue;										// back to beginning of loop, discard the packet
+				}
+			}
+			#ifdef DEBUG
+			ui_log("DEBUG Client %s:%d found in game %d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), g->game_id);
+			#endif
+
+			// update some client details
+			if (!monitor_mode) {
+			pnum = find_client_in_game(g, &cliaddr);	// find the player number in this game of sender
+			if (pnum == 255)							// client not found in game (something weird happened)
+				continue;								// back to beginning of loop, discard this packet
+
+			time_t t = time(NULL);
+			g->client[pnum].last_heard = t;				// record last hard time
+		}
+			else {
+			time_t t = time(NULL);
+			pnum = 0;
+			g->client[pnum].last_heard = t;				// record last hard time			
+		}
+
+			/*****************/
+			/* In Game State */
+			/*****************/
+			if (g->logon == 0) {
+				#ifdef DEBUG
+				print_game_packet(buf, buf[0]+2);
+				#endif
+				
+				while(1) {
+					process_game_packet(g, pnum, buf, buf[0]);
+					if (!check_buffer_for_more(buf, recvfrom_ret))
+						break;
+					else
+						recvfrom_ret -= buf[0]+2;
+				}
+			}
+			else {
+				/******************/
+				/* In Logon State */
+				/******************/
+				#ifdef DEBUG
+				print_game_packet(buf, buf[0]+2);
+				#endif
+
+				if (monitor_mode) {
+					if (buf[3] > 1)
+						g->num_players = buf[3]-1;
+					else
+						g->num_players = 1;
+				}
+
+				// Check if the logon phase is ending
+				if (g->logon && (buf[0] == 5) && (buf[1] == 2) && (buf[2] == 1)) {		// game is logon phase, packet is a logon packet (size 5), and message id is logon ending
+		  			g->logon = 0;														// this game is ending for logon, block new players
+
+					ui_log("GAME %04X %s --> Logon ended, players: %d \n", g->game_id, *g->name, g->num_players);
+				}
+
+			/*******************/
+			/* Send to Players */
+			/*******************/
+			if ((g->num_players > 1) && !monitor_mode)	{				// don't even bother if only one player, or in monitor mode
+				send_to_other_clients(g, pnum, buf, recvfrom_ret);		// mirror this packet to other clients in game
 			}
 		}
-		//printf("Client %s:%d found in game %d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), g->game_id);
-
-		// update some client details
-		pnum = find_client_in_game(g, &cliaddr);				// find the player number in this game of sender
-		if (pnum == 255)							// client not found in game (something weird happened)
-			continue;							// back to beginning of loop, discard this packet
-
-		time_t t = time(NULL);
-		g->client[pnum].last_heard = t;						// record last hard time
-	    	//memset(g->client[pnum].last_msg_recv, 0, BUF_SIZE);			// clear last msg recv
-	    	//memcpy(g->client[pnum].last_msg_recv, buf, recvfrom_ret);		// record last msg recv
-
-		if (g->logon == 0) {
-			print_game_packet(buf, buf[0]);
 		}
 
-		// Check if the logon phase is ending
-		if (g->logon && (buf[0] == 5) && (buf[1] == 2)) {			// game is logon phase, packet is a logon packet (size 5), and message id is logon ending
-		  	g->logon = 0;							// this game is ending for logon, block new players
-			printf("Logon ending for game %04X %s, players: %d\n", g->game_id, *g->name, g->num_players);
-		}
+       	/*********************/
+	   	/* Stats and Cleanup */
+	   	/*********************/
+	   	//handle_stats_print();				// print packet stats
+	   	ui_refresh();
+		if (!monitor_mode)
+			handle_client_timeout();			// prune timed out clients and dead games
+    
+		
+	}
 
-		// mirror this packet to other clients in this game
-		if (g->num_players > 1)	{									// don't even bother if only one player
-			//printf("Sending to other clients in game %d %s, for player %d\n", g->game_id, *g->name, pnum);
-			//printf("%d ", pnum);
-			send_to_other_clients(g, pnum, buf, recvfrom_ret);		// mirror this packet to other clients in game
-		}
-    }
-
+	fclose(fp);
     return 0;
 }
 

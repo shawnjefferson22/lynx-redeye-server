@@ -3,9 +3,10 @@
 
 
 #define BUF_SIZE	      	32				// packet buffer size
-#define CLIENT_TIMEOUT  	5         // timeout client interval
-#define NUM_GAMES 			  41			  // number of games in the game list
-
+#define MAX_PKT_SIZE		16				// max packet size we're handling (may need to go higher?)
+#define CLIENT_TIMEOUT  	5         		// timeout client interval
+#define NUM_GAMES 			41			  	// number of games in the game list
+#define MAX_PLAYERS			16
 
 typedef struct CLIENT_T
 {
@@ -24,6 +25,13 @@ typedef struct STATS_T
     uint64_t last_bad_checksum;
 } STATS_T;
 
+typedef struct GAME_STATE_T
+{
+	//uint8_t cur_seq;
+	uint8_t plr_data_recv[2][MAX_PLAYERS];
+	uint8_t seq_plr_data[2][MAX_PLAYERS][BUF_SIZE];
+} GAME_STATE_T;
+
 typedef struct GAME_T
 {
   uint16_t game_id;             // game id
@@ -31,7 +39,10 @@ typedef struct GAME_T
   uint8_t num_players;          // number of players
   uint8_t max_players;			    // max players for this game
   char **name;					        // pointer to game name in games list
-  CLIENT_T client[16];          // client list, up to 16
+  CLIENT_T client[MAX_PLAYERS]; // client list, up to 16
+  GAME_STATE_T state;			      // game state
+  uint64_t round_start;			    // round start time (sequence)
+  uint64_t last_round_time;		  // last round time (ms)
   struct GAME_T *next;         	// point to next game
 } GAME_T;
 
@@ -43,22 +54,26 @@ typedef struct GAME_LIST_T
 } GAME_LIST_T;
 
 
-extern struct GAME_T *games;                  // games being played list
-extern struct GAME_LIST_T game_list[];  		  // game list
-extern struct STATS_T stats;                  // global packet statistics
+extern struct GAME_T *games;                  	// games being played list
+extern struct GAME_LIST_T game_list[];  		// game list
+extern struct STATS_T stats;  	                // global packet statistics
 
 GAME_T *find_game_by_client_address(const struct sockaddr_in* addr);
 GAME_T *find_game_by_id(uint16_t id);
 uint8_t find_client_in_game(GAME_T *game, struct sockaddr_in* addr);
+uint8_t find_game_in_game_list(uint16_t gid);
 GAME_T *create_new_game(uint16_t game_id, struct sockaddr_in* addr);
 void join_game(GAME_T *game, struct sockaddr_in* addr);
-uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, uint8_t *packet, uint8_t psize);
+uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *packet, uint8_t psize);
+uint8_t resend_data_to_clients(struct GAME_T *game, uint8_t req_player, uint8_t *packet, uint8_t psize);
 void handle_client_timeout();
-uint8_t find_game_in_game_list(uint16_t gid);
 
+void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, uint32_t buff_size);
 
 // defined in main.c
 extern int sockfd;				// Socket File Descriptor
+extern bool monitor_mode;
+extern FILE *fp;
 extern void util_dump_bytes(const uint8_t *buff, uint32_t buff_size);
 
 

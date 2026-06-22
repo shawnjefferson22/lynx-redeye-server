@@ -1,14 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include <sys/types.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include <errno.h>
 #include "game.h"
+#include "display.h"
 
 
 /* Game List */
@@ -59,6 +63,13 @@ GAME_LIST_T game_list[] = {
 
 struct GAME_T *games;                   // games being played list
 
+
+uint64_t get_time_ms()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL;
+}
 
 
 /* find_game_in_game_list
@@ -223,9 +234,24 @@ GAME_T *create_new_game(uint16_t game_id, struct sockaddr_in* addr)
   memset(newgame->client[0].last_msg_recv, 0, BUF_SIZE);
   memcpy((void *) &(newgame->client[0].client_addr), (void *) addr, sizeof(struct sockaddr_in));
 
-  /* DEBUGGING */
-  //printf("new_game:%d %d %d\n", newgame->game_id, newgame->logon, newgame->num_players);
-  //printf("client[0] %f %s:%d\n", newgame->client[0].last_heard, inet_ntoa(newgame->client[0].client_addr.sin_addr), ntohs(newgame->client[0].client_addr.sin_port));
+	// clear the game state
+  	//newgame->state.cur_seq = 0;
+  	for (i=0; i<MAX_PLAYERS; i++) {
+		newgame->state.plr_data_recv[0][i] = 0;
+		newgame->state.plr_data_recv[1][i] = 0;
+		
+		memset(newgame->state.seq_plr_data[0][i], 0, BUF_SIZE);
+		memset(newgame->state.seq_plr_data[1][i], 0, BUF_SIZE);
+	}
+
+	newgame->round_start = 0;
+	newgame->last_round_time = 0;
+
+  	/* DEBUGGING */
+  	#ifdef DEBUG
+  	ui_log("new_game:%d %d %d\n", newgame->game_id, newgame->logon, newgame->num_players);
+  	ui_log("client[0] %f %s:%d\n", newgame->client[0].last_heard, inet_ntoa(newgame->client[0].client_addr.sin_addr), ntohs(newgame->client[0].client_addr.sin_port));
+	#endif
 
   return(newgame);
 }
@@ -245,12 +271,12 @@ void join_game(GAME_T *game, struct sockaddr_in* addr)
 
   // Don't allow a client to join a game in progress, must be in logon phase
   if (game->logon) {
-    memcpy((void *) &(game->client[game->num_players].client_addr), (void *) addr, sizeof(struct sockaddr_in));
-	  game->client[game->num_players].last_heard = time(NULL);
-    memset(game->client[0].last_msg_sent, 0, BUF_SIZE);
-    memset(game->client[0].last_msg_recv, 0, BUF_SIZE);
+    	memcpy((void *) &(game->client[game->num_players].client_addr), (void *) addr, sizeof(struct sockaddr_in));
+		game->client[game->num_players].last_heard = time(NULL);
+    	memset(game->client[0].last_msg_sent, 0, BUF_SIZE);
+    	memset(game->client[0].last_msg_recv, 0, BUF_SIZE);
 
-    game->num_players++;
+    	game->num_players++;
   }
 }
 
@@ -259,7 +285,7 @@ void join_game(GAME_T *game, struct sockaddr_in* addr)
  *
  * Iterate through the game list, sending this packet to the other clients in the game.
  */
-uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, uint8_t *packet, uint8_t psize)
+uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *packet, uint8_t psize)
 {
   uint8_t i;
   uint8_t sendto_ret;
@@ -273,21 +299,21 @@ uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, uint8_t *pack
   // iterate through client list
   for(i=0; i<game->num_players; i++) {
     if (i != sender) {	 					// don't send to the original sender
-      clilen = sizeof(game->client[i].client_addr);
+      	clilen = sizeof(game->client[i].client_addr);
 	    sendto_ret = sendto(sockfd, packet, psize, 0, (struct sockaddr*) &(game->client[i].client_addr), clilen);
 
 	    // *** DEBUGGING ***
-      //printf("Sending to %s:%d ", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
-      //printf("PKT: ");
-      //util_dump_bytes(packet, psize);
-      //printf("\n");
+	    #ifdef DEBUG
+      	ui_log("DEBUG Sending to %s:%d", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
+      	util_dump_bytes(packet, psize);
+		#endif
 
-      // update the last message sent to this client
+      	// update the last message sent to this client
 	    memset(game->client[i].last_msg_sent, 0, BUF_SIZE);
 	    memcpy(game->client[i].last_msg_sent, packet, psize);
 
 	    if (sendto_ret < 0) {
-        perror("sendto failed");
+        	perror("sendto failed");
       }
     }
   }
@@ -318,21 +344,27 @@ void handle_client_timeout() {
   // Walk the games list, determine which clients to remove and prune empty games
   g = lg = games;
   while (g) {
-    for(i=0; i<g->num_players; i++) {
-      if ((t - g->client[i].last_heard) > CLIENT_TIMEOUT) {
-        printf("handle_client_timeout, game:%04X client:%d lh:%ld\n", g->game_id, i, (t - g->client[i].last_heard));
-        for (j=i; j<g->num_players; j++) {
-          //printf("handle_client_timeout, pruning game:%d client:%d\n", g->game_id, j);
-          memcpy(&g->client[j], &g->client[j+1], sizeof(CLIENT_T));
-        }
-
-        i--;
-        g->num_players--;
-      }
+	if (!monitor_mode) {
+    	for(i=0; i<g->num_players; i++) {
+      		if ((t - g->client[i].last_heard) > CLIENT_TIMEOUT) {
+        		printf("handle_client_timeout, game:%04X client:%d lh:%ld\n", g->game_id, i, (t - g->client[i].last_heard));
+        		for (j=i; j<g->num_players; j++) {
+          			//printf("handle_client_timeout, pruning game:%d client:%d\n", g->game_id, j);
+          			memcpy(&g->client[j], &g->client[j+1], sizeof(CLIENT_T));
+        		}
+			}
+        	i--;
+        	g->num_players--;
+      	}	
     }
-       
+	else {
+		if ((t - g->client[0].last_heard) > CLIENT_TIMEOUT) {
+			g->num_players = 0;
+		}
+	}
+
     if (g->num_players == 0) {
-        printf("handle_client_timeout, pruning game with id %04X\n", g->game_id);
+        ui_log("handle_client_timeout, pruning game with id %04X\n", g->game_id);
         if (g == games) {               // is this the head of the list?
           games = g->next;              // point head to next node (which may be NULL)
           free(g);                      // free node
@@ -353,3 +385,130 @@ void handle_client_timeout() {
   return;
 }
 
+
+/* check_data_recv
+ *
+ * Check that all players have sent data for full sequence
+ */
+bool check_data_recv(struct GAME_T *game)
+{
+	uint8_t i;
+
+	for(i=0; i<game->num_players; i++) {
+	if ((game->state.plr_data_recv[0][i] == 0) || (game->state.plr_data_recv[1][i] == 0))
+		return(false);
+	}
+
+	return(true);
+}
+
+
+/* process_game_packet
+ *
+ * Process an in-game packet and update the game state. We could do retransmissions here if we have the data
+ * rather than asking the client to do it.
+ */
+void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, uint32_t buff_size)
+{
+	uint8_t msg, plr, seq;
+
+	// Parse header data
+	msg = buf[1] & 0x07;
+	plr = (buf[1] & 0x78) >> 3;
+	seq = (buf[1] & 0x80) ? 1 : 0;
+
+	// What msg type is it?
+	switch(msg) {
+		case 3:		// Data packet
+			game->state.plr_data_recv[seq][plr] = 1;
+			memcpy(game->state.seq_plr_data[seq][plr], buf, buff_size);
+
+			ui_log("GAME %04X %s --> DATA player %d data for seq %d - header:%08b\n", game->game_id, *game->name, plr, seq, buf[1]);
+			break;
+		case 4:		// SendData Req
+			if (game->state.seq_plr_data[seq][plr][0] != 0) {
+				ui_log("GAME %04X %s --> REQUEST player %d data for seq %d, we have it\n", game->game_id, *game->name, plr, seq);
+
+				if (!monitor_mode) {
+					resend_data_to_clients(game, plr, game->state.seq_plr_data[seq][plr], game->state.seq_plr_data[seq][plr][0]);
+					return;
+				}
+			}
+			else {
+				ui_log("GAME %04X %s --> REQUEST player %d data for seq %d, we don't have it\n", game->game_id, *game->name, plr, seq);
+			}
+			break;
+		case 5:		// Master Resend Req
+			ui_log("GAME %04X %s --> REQUEST Master Resend for seq %d, player mask %08b\n", game->game_id, *game->name, seq, buf[2]);
+			break;
+	}
+
+	// Deal with sequence switch, all data received and we see a new seq #?
+	if (check_data_recv(game)) {
+		for (uint8_t i=0; i<game->num_players; i++) {
+			// clear player data received status for current sequence
+			game->state.plr_data_recv[0][i] = 0;
+			game->state.plr_data_recv[1][i] = 0;
+			
+			// clear player data for current sequence
+			memset(game->state.seq_plr_data[0][i], 0, BUF_SIZE);
+			memset(game->state.seq_plr_data[1][i], 0, BUF_SIZE);
+		}
+
+		// measure sequence time
+		if (game->round_start)
+			game->last_round_time = (get_time_ms() - game->round_start);
+		game->round_start = get_time_ms();
+
+		ui_log("GAME %04X %s --> SEQ Full sequence starting, last sequence time: %lu ms\n", game->game_id, *game->name, game->last_round_time);
+	}
+
+
+	/*******************/
+	/* Send to Players */
+	/*******************/
+	if ((game->num_players > 1) && !monitor_mode)	{					// don't even bother if only one player, or in monitor mode
+		send_to_other_clients(game, pnum, buf, buff_size);				// mirror this packet to other clients in game
+	}
+}
+
+
+/* resend_data_to_clients
+ *
+ * A resend request was seen, but we have the data, so we can just send it ourselves.
+ * Don't send to the player whose data we requested.
+ */
+uint8_t resend_data_to_clients(struct GAME_T *game, uint8_t req_player, uint8_t *packet, uint8_t psize)
+{
+  uint8_t i;
+  uint8_t sendto_ret;
+  socklen_t clilen;
+
+  // Check valid game
+  if (!game)
+    return(0);
+
+  // iterate through client list
+  for(i=0; i<game->num_players; i++) {
+    if (i != req_player) {	 					// don't send to the player who would be resending
+      	clilen = sizeof(game->client[i].client_addr);
+	    sendto_ret = sendto(sockfd, packet, psize, 0, (struct sockaddr*) &(game->client[i].client_addr), clilen);
+
+	    // *** DEBUGGING ***
+	    #ifdef DEBUG
+      	ui_log("DEBUG resending to %s:%d", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
+      	util_dump_bytes(packet, psize);
+		#endif
+
+      	// update the last message sent to this client (do we need this?)
+	    memset(game->client[i].last_msg_sent, 0, BUF_SIZE);
+	    memcpy(game->client[i].last_msg_sent, packet, psize);
+
+	    if (sendto_ret < 0) {
+        	perror("sendto failed");
+      }
+    }
+  }
+
+  return(1);
+}
