@@ -417,6 +417,7 @@ void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf,
 	// Doesn't look like a logon packet
 	if (buf[0] != 5) {
 		ui_log("GAME #%d %04X [%d] %s --> ERROR not a logon packet\n", game->instance, game->game_id, game->name);
+		return;
 	}
 
 	#ifdef DEBUG
@@ -488,7 +489,11 @@ void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, 
 			game->state.plr_data_recv[seq][plr] = 1;
 			memcpy(game->state.seq_plr_data[seq][plr], buf, buff_size);
 
-			ui_log("GAME #%d %04X %s --> DATA player %d data for seq %d - header:%08b\n", game->instance, game->game_id, *game->name, plr, seq, buf[1]);
+			#ifdef PKTDEBUG
+			print_game_packet(buf, buf[0]+2);
+			#endif
+
+			ui_log("GAME #%d %04X %s --> DATA player %d data for seq %d - header:%08b, data size:%d\n", game->instance, game->game_id, *game->name, plr, seq, buf[1], buf[0]);
 			break;
 		case 4:		// SendData Req
 			if (game->state.plr_data_recv[seq][plr]) {

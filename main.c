@@ -65,7 +65,7 @@ bool check_buffer_for_more(uint8_t *buf, uint8_t bufsize)
 		ui_log("DEBUG - found more buf[0]:%d buf[0]+2:%d\n", buf[0], buf[(buf[0]+2)]);
 		#endif
 
-		memmove(&buf[0], &buf[(buf[0]+2)], buf[buf[0]+1]);
+		memmove(&buf[0], &buf[(buf[0]+2)], buf[buf[0]+2]);
 
 		#ifdef DEBUG
 		util_dump_bytes(buf, buf[0]+2);
@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
 
 		int nfds = (sockfd > STDIN_FILENO ? sockfd : STDIN_FILENO) + 1;
 
-		int ret = select(sockfd+1, &readfds, NULL, NULL, &tv);
+		int ret = select(nfds, &readfds, NULL, NULL, &tv);
 		if (ret < 0) {
 			if (errno == EINTR)
 				continue;
@@ -239,10 +239,6 @@ int main(int argc, char *argv[])
 			/* In Game State */
 			/*****************/
 			if (g->logon == 0) {
-				#ifdef DEBUG
-				print_game_packet(buf, buf[0]+2);
-				#endif
-
 				while(1) {
 					process_game_packet(g, pnum, buf, buf[0]);
 					if (!check_buffer_for_more(buf, recvfrom_ret))
@@ -255,10 +251,6 @@ int main(int argc, char *argv[])
 				/******************/
 				/* In Logon State */
 				/******************/
-				#ifdef DEBUG
-				print_logon_packet(buf, buf[0]+2);
-				#endif
-
 				process_logon_packet(g, pnum, buf, buf[0]);
 
 				/*******************/
