@@ -95,11 +95,18 @@ void ui_log(const char *fmt, ...)
     va_start(args, fmt);
 
     vsnprintf(log_buffer[log_index], 128, fmt, args);
-    fputs(log_buffer[log_index], fp);
+   	fputs(log_buffer[log_index], fp);
 
     log_index = (log_index + 1) % LOG_LINES;
 
     va_end(args);
+}
+
+
+void clear_log()
+{
+	memset(log_buffer, 0, sizeof(log_buffer));
+	log_index = 0;
 }
 
 
@@ -289,29 +296,15 @@ void print_logon_packet(const uint8_t *buff, uint32_t buff_size)
 }
 
 
-void handle_stats_print()
+void print_stats()
 {
-	time_t now, dur;
+	//time_t now, dur;
 	float mal_percent;
 	float bad_percent;
 
-	// print stats
-	now = time(NULL);
-	dur = now - start;
+	mal_percent = ((float) stats.malformed / (float) (stats.good_checksum+stats.malformed+stats.bad_checksum)) * 100;
+	bad_percent = ((float)stats.bad_checksum / (float) (stats.good_checksum+stats.malformed+stats.bad_checksum)) * 100;
 
-	if ((dur % STATS_PRINT_DUR) == 0) {
-		if (!stats_printed) {
-			mal_percent = ((float) stats.malformed / (float) (stats.good_checksum+stats.malformed+stats.bad_checksum)) * 100;
-			bad_percent = ((float)stats.bad_checksum / (float) (stats.good_checksum+stats.malformed+stats.bad_checksum)) * 100;
-
-			ui_log("STATS good: %ld, malformed: %ld %.2f%% DELTA:%ld, bad checksum: %ld %.2f%% DELTA:%ld\n", stats.good_checksum, stats.malformed, mal_percent,
-					(stats.malformed - stats.last_malformed), stats.bad_checksum, bad_percent, (stats.bad_checksum - stats.last_bad_checksum));
-			//stats.last_malformed = stats.malformed;
-			//stats.last_bad_checksum = stats.bad_checksum;
-			stats_printed = true;
-		}
-	}
-	else {
-		stats_printed = false;
-	}
+	ui_log("STATS good: %ld, malformed: %ld %.2f%% DELTA:%ld, bad checksum: %ld %.2f%% DELTA:%ld\n", stats.good_checksum, stats.malformed, mal_percent,
+		(stats.malformed - stats.last_malformed), stats.bad_checksum, bad_percent, (stats.bad_checksum - stats.last_bad_checksum));
 }
