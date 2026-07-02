@@ -33,7 +33,9 @@ int log_index = 0;
 
 STATS_T stats;
 time_t start;
+long long start_ms;
 bool stats_printed = true;
+
 
 
 void display_init()
@@ -44,6 +46,12 @@ void display_init()
 	curs_set(0);
 	setlocale(LC_ALL, "");
 
+    // get start time for log display
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    long long start_ms = (long long)ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+
+    // screen dimensions
 	int rows, cols;
 	getmaxyx(stdscr, rows, cols);
 	log_h = rows - (TITLE_H + STATS_H + GAMES_H);
@@ -88,18 +96,32 @@ void ui_refresh()
 	}
 }
 
-
 void ui_log(const char *fmt, ...)
 {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+
+    long long now_ms =
+        (long long)ts.tv_sec * 1000LL +
+        ts.tv_nsec / 1000000;
+
+    if (start_ms == 0)
+        start_ms = now_ms;
+
+    char *buf = log_buffer[log_index];
+
+    // Write the elapsed time prefix
+    int len = snprintf(buf, 128, "[%lld] ", now_ms - start_ms);
+
+    // Append the formatted log message
     va_list args;
     va_start(args, fmt);
+    vsnprintf(buf + len, 128 - len, fmt, args);
+    va_end(args);
 
-    vsnprintf(log_buffer[log_index], 128, fmt, args);
-   	fputs(log_buffer[log_index], fp);
+    fputs(buf, fp);
 
     log_index = (log_index + 1) % LOG_LINES;
-
-    va_end(args);
 }
 
 
@@ -195,6 +217,9 @@ void draw_packet_stats()
     mvwprintw(win_packets, 2, 2, "Bad Checksum: %lu %.2f%% delta:%ld", stats.bad_checksum, bad_percent, (stats.bad_checksum - stats.last_bad_checksum));
     mvwprintw(win_packets, 3, 2, "Malformed:    %lu %.2f%% delta:%ld", stats.malformed, mal_percent, (stats.malformed - stats.last_malformed));
 
+    if (monitor_mode)
+        mvwprintw(win_packets, 4, 2, "[MONITOR MODE]");
+
     stats.last_malformed = stats.malformed;
 	stats.last_bad_checksum = stats.bad_checksum;
 }
@@ -287,11 +312,14 @@ void print_logon_packet(const uint8_t *buff, uint32_t buff_size)
     // decode fields
     uint8_t msg = buff[1];
     uint8_t countdown = buff[2];
-    uint8_t plrs = buff[3] - 1;
+    uint8_t plrs = buff[3];
     // buff[4] + [5] contain game id, already extracted
 
-
-    offset += snprintf(line + offset, sizeof(line) - offset, "- Msg=%02X Plrs=%d countdown=%d\n", msg, plrs, countdown);
+    if (msg == 0)
+        offset += snprintf(line + offset, sizeof(line) - offset, "- Msg=%02X Plrs=%d player=%d\n", msg, popcount(plrs), countdown);
+    else
+        offset += snprintf(line + offset, sizeof(line) - offset, "- Msg=%02X Plrs=%d countdown=%d\n", msg, popcount(plrs), countdown);
+   
     ui_log("%s", line);
 }
 
@@ -307,4 +335,23 @@ void print_stats()
 
 	ui_log("STATS good: %ld, malformed: %ld %.2f%% DELTA:%ld, bad checksum: %ld %.2f%% DELTA:%ld\n", stats.good_checksum, stats.malformed, mal_percent,
 		(stats.malformed - stats.last_malformed), stats.bad_checksum, bad_percent, (stats.bad_checksum - stats.last_bad_checksum));
+}
+
+void print_game_clients()
+{
+    GAME_T *g;
+    uint8_t i;
+
+
+
+    g = games;
+    while (g) {
+        for(i=0; i<g->num_players; i++) {
+            time_t t = time(NULL);
+            ui_log("GAME #%d %04X %s --> Client:%d %s:%d last_heard:%d recv_data:%d:%d\n", g->instance, g->game_id, *g->name, i,
+                    inet_ntoa(g->client[i].client_addr.sin_addr), ntohs(g->client[i].client_addr.sin_port),
+                    (t - g->client[i].last_heard), g->state.plr_data_recv[0][i], g->state.plr_data_recv[1][i]);
+        }
+        g = g->next;
+    }
 }

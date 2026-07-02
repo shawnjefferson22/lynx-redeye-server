@@ -29,36 +29,40 @@ typedef struct GAME_STATE_T
 {
 	uint8_t plr_data_recv[2][MAX_PLAYERS];
 	uint8_t seq_plr_data[2][MAX_PLAYERS][BUF_SIZE];
+  uint8_t plr_logon_sent[MAX_PLAYERS];
 } GAME_STATE_T;
 
 typedef struct GAME_T
 {
   uint16_t game_id;             // game id
-  uint32_t instance;			// game instance (to differentiate duplicate games)
+  uint32_t instance;			      // game instance (to differentiate duplicate games)
   uint8_t logon;                // in logon phase?
   uint8_t num_players;          // number of players
-  uint8_t max_players;			// max players for this game
-  char **name;					// pointer to game name in games list
+  uint8_t max_players;			    // max players for this game
+  char **name;					        // pointer to game name in games list
   CLIENT_T client[MAX_PLAYERS]; // client list, up to 16
-  GAME_STATE_T state;			// game state
+  GAME_STATE_T state;			      // game state
   uint64_t game_start;          // time of game start
   uint64_t rounds;              // number of rounds (sequences)
-  uint64_t round_start;			// round start time (sequence)
-  uint64_t last_round_time;		// last round time (ms)
+  uint64_t round_start;			    // round start time (sequence)
+  uint64_t last_round_time;		  // last round time (ms)
   uint64_t avg_round_time;      // average round time
   struct GAME_T *next;         	// point to next game
 } GAME_T;
 
 typedef struct GAME_LIST_T
 {
-  uint16_t game_id;				// game id
+  uint16_t game_id;				  // game id
   uint8_t max_players;			// maximum players for ths game
-  char *name;					// the game name
+  char *name;					      // the game name
 } GAME_LIST_T;
 
-extern struct GAME_T *games;                  	// games being played
+extern struct GAME_T *games;                // games being played
 extern struct GAME_LIST_T game_list[];  		// game list for name, max players
-extern struct STATS_T stats;  	                // global packet statistics
+extern struct STATS_T stats;  	            // global packet statistics
+
+// helper to count bits
+int popcount(uint8_t bits);
 
 // game list searching
 GAME_T *find_game_by_client_address(struct sockaddr_in* addr);

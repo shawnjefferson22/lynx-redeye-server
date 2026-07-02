@@ -1,0 +1,179 @@
+[0] SERVER Listening for connections on port 6502.
+[0] SERVER Logging to file shanghai-server.log
+[14] SERVER Client 192.168.1.71:6502 not found, creating game id: 0053 Shanghai, max players: 2
+[3799] GAME #0 0053 Shanghai --> Client:0 192.168.1.71:6502 last_heard:0 recv_data:0:0
+[54221] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54221] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54236] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54238] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54267] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54269] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54269] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54297] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54298] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54326] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54328] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54346] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54348] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54349] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54366] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54368] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54386] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54388] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54406] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54408] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54411] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54426] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54428] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54451] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54453] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54474] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54476] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54476] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54486] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54488] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54506] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54508] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54536] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54542] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54542] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54557] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54559] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54576] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54578] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54606] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54607] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54609] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54626] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54628] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54656] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54657] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54666] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54667] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54670] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54697] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54698] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54718] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54718] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54736] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54738] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54739] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54766] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54768] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54786] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54788] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54807] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54807] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54809] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54836] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[54838] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55377] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55378] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55398] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55400] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55426] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55428] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55429] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55446] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55448] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55467] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55468] SERVER Client 192.168.1.78:6502 not found in any game, and not a logon packet!
+[55486] SERVER Client 192.168.1.78:6502 not found, joining game 0053 Shanghai
+[58418] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58418] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58456] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58478] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58501] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58531] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58564] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58578] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58586] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58626] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58656] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58696] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58706] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[58736] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59056] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59067] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59076] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59106] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59147] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59149] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59196] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59228] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59246] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59277] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59296] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59346] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59376] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59406] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59446] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59466] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59491] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59536] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59556] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59587] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59606] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59626] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59648] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59676] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[59704] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60067] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60098] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60121] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60177] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60208] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60257] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60286] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60309] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60887] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60889] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60916] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60946] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60967] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[60985] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[61056] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[61076] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[61107] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[61140] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[61156] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[61178] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[61216] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[61246] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[61266] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62347] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62366] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62398] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62417] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62586] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62618] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62656] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62676] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62696] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62726] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62756] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[62776] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70351] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70366] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70392] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70436] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70476] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70586] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70616] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70636] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70676] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[70679] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71027] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71037] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71056] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71081] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71108] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71127] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71156] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71556] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71596] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71633] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[71646] GAME #0 0053 Shanghai buf[0]:3 --> ERROR not a logon packet
+[73025] GAME #0 0053 Shanghai --> Client:0 192.168.1.71:6502 last_heard:0 recv_data:0:0
+[73025] GAME #0 0053 Shanghai --> Client:1 192.168.1.78:6502 last_heard:0 recv_data:0:0
+[73950] SERVER Shutting down.

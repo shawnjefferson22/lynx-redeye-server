@@ -75,6 +75,19 @@ uint64_t get_time_ms()
     return (uint64_t)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL;
 }
 
+// count bits set for player mask
+int popcount(uint8_t bits)
+{
+    int count = 0;
+
+    while (bits) {
+        count += bits & 1;
+        bits >>= 1;
+    }
+
+    return count;
+}
+
 
 /* find_game_in_game_list
  *
@@ -299,6 +312,8 @@ uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t
   if (!game)
     return(0);
 
+	//ui_log("send_to_other_clients - sender:%d, plrs:%d\n", sender, game->num_players);
+
   // iterate through client list
   for(i=0; i<game->num_players; i++) {
     if (i != sender) {	 					// don't send to the original sender
@@ -307,7 +322,7 @@ uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t
 
 	    // *** DEBUGGING ***
 	    #ifdef DEBUG
-      	ui_log("DEBUG Sending to %s:%d", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
+      	ui_log("DEBUG Sending to %s:%d\n", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
       	util_dump_bytes(packet, psize);
 		#endif
 
@@ -350,9 +365,9 @@ void handle_client_timeout() {
         		for (j=i; j<g->num_players; j++) {
           			memcpy(&g->client[j], &g->client[j+1], sizeof(CLIENT_T));
         		}
-			}
-        	i--;
+				i--;
         	g->num_players--;
+			}
       	}
     }
 	else {
@@ -416,30 +431,38 @@ void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf,
 
 	// Doesn't look like a logon packet
 	if (buf[0] != 5) {
-		ui_log("GAME #%d %04X [%d] %s --> ERROR not a logon packet\n", game->instance, game->game_id, game->name);
+		ui_log("GAME #%d %04X %s buf[0]:%d --> ERROR not a logon packet\n", game->instance, game->game_id, *game->name, buf[0]);
 		return;
 	}
 
-	#ifdef DEBUG
+	#ifdef PKTDEBUG
 	print_logon_packet(buf, buf[0]+2);
 	#endif
 
 	// Extract number of players logged in
 	msg = buf[1];
 	countdown = buf[2];
-	plrs = buf[3] - 1;
+	plrs = popcount(buf[3]);
 	// buf[4] + buf[5] contains game id, already extracted
 
 	// Is the game ending?
 	switch (msg) {
 		case 2:					// game is starting
 			ui_log("GAME #%d %04X %s --> Game starting in %d\n", game->instance, game->game_id, *game->name, countdown);
-			if (countdown == 1) {
+			if ((countdown == 1) && monitor_mode) {
 				game->logon = 0;
 				ui_log("GAME #%d %04X %s --> Logon ended, players: %d \n", game->instance, game->game_id, *game->name, game->num_players);
 
 				game->game_start = get_time_ms();
 				game->round_start = get_time_ms();
+			}
+			else {
+				game->logon = 0;
+				ui_log("GAME #%d %04X %s --> Logon ended, players: %d \n", game->instance, game->game_id, *game->name, game->num_players);
+
+				game->game_start = get_time_ms();
+				game->round_start = get_time_ms();
+	
 			}
 			break;
 
@@ -447,15 +470,29 @@ void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf,
 			if (game->num_players < plrs) {
 				ui_log("GAME #%d %04X %s --> Logon new player %d\n", game->instance, game->game_id, *game->name, countdown);
 
-				// increase number of players
+				// increase number of players in monitor mode
 				if (monitor_mode) {
-					if (buf[3] > 1)
-						game->num_players = plrs;
-					else
-						game->num_players = 1;
+					game->num_players = plrs;
 				}
 			}
+
+			// Don't spam other players with logon messages
+			if (game->state.plr_logon_sent[countdown]) {
+				game->state.plr_logon_sent[countdown]--;
+				#ifdef DEBUG
+				ui_log("GAME #%d %04X %s --> suppressing logon message from %d\n", game->instance, game->game_id, *game->name, countdown);
+				#endif
+				return;	
+			}
+			else {
+				game->state.plr_logon_sent[countdown] = 5;
+			}
 			break;
+	}
+
+
+	if ((game->num_players > 1) && !monitor_mode)	{				// don't even bother if only one player, or in monitor mode
+		send_to_other_clients(game, pnum, buf, buff_size);			// mirror this packet to other clients in game
 	}
 
 }
@@ -470,7 +507,7 @@ void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, 
 {
 	uint8_t msg, plr, seq;
 
-	// Parse header data
+	// Parse header dataq
 	msg = buf[1] & 0x07;
 	plr = (buf[1] & 0x78) >> 3;
 	seq = (buf[1] & 0x80) ? 1 : 0;
@@ -511,9 +548,10 @@ void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, 
 		case 5:		// Master Resend Req
 			ui_log("GAME #%d %04X %s --> REQUEST Master Resend by player %d, seq %d, player mask %08b\n", game->instance, game->game_id, *game->name, plr, seq, buf[2]);
 			if (!monitor_mode) {
-			master_resend_data(game, seq, buf[2]);
-			return;
-		}
+				master_resend_data(game, seq, buf[2]);
+				return;
+			}
+			break;
 	}
 
 	// Deal with sequence switch, all data received and we see a new seq #?

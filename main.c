@@ -190,6 +190,9 @@ int main(int argc, char *argv[])
 				case 's':
 					print_stats();
 					break;
+				case 'l':
+					print_game_clients();
+					break;
 			}
 		}
 
@@ -240,7 +243,7 @@ int main(int argc, char *argv[])
 			/*****************/
 			if (g->logon == 0) {
 				while(1) {
-					process_game_packet(g, pnum, buf, buf[0]);
+					process_game_packet(g, pnum, buf, buf[0]+2);
 					if (!check_buffer_for_more(buf, recvfrom_ret))
 						break;
 					else
@@ -251,15 +254,15 @@ int main(int argc, char *argv[])
 				/******************/
 				/* In Logon State */
 				/******************/
-				process_logon_packet(g, pnum, buf, buf[0]);
+				process_logon_packet(g, pnum, buf, buf[0]+2);
 
 				/*******************/
 				/* Send to Players */
 				/*******************/
-				if ((g->num_players > 1) && !monitor_mode)	{				// don't even bother if only one player, or in monitor mode
-					send_to_other_clients(g, pnum, buf, recvfrom_ret);		// mirror this packet to other clients in game
+				//if ((g->num_players > 1) && !monitor_mode)	{				// don't even bother if only one player, or in monitor mode
+				//	send_to_other_clients(g, pnum, buf, recvfrom_ret);		// mirror this packet to other clients in game
+				//}
 			}
-		}
 		}
 
        	/**********************/
@@ -318,10 +321,6 @@ GAME_T *client_lookup(struct sockaddr_in *cliaddr, uint8_t *buf, uint8_t *pnum)
 		else {
 			// client not found in any game, and not a logon packet, just discard it!
 	   		ui_log("SERVER Client %s:%d not found in any game, and not a logon packet!\n", inet_ntoa(cliaddr->sin_addr), ntohs(cliaddr->sin_port));
-	   		#ifdef DEBUG
-	   		util_dump_bytes(buf, recvfrom_ret);
-	   		#endif
-
 			return(NULL);
 		}
 	}
@@ -333,16 +332,17 @@ GAME_T *client_lookup(struct sockaddr_in *cliaddr, uint8_t *buf, uint8_t *pnum)
 	// update some client details
 	if (!monitor_mode) {
 		*pnum = find_client_in_game(g, cliaddr);	// find the player number in this game of sender
+		//ui_log("DEBUG Game %d %s, Client %s:%d, pnum: %d\n", g->game_id, *g->name, inet_ntoa(cliaddr->sin_addr), ntohs(cliaddr->sin_port), *pnum);
 		if (*pnum == 255)							// client not found in game (something weird happened)
 			return(g);								// back to beginning of loop, discard this packet
 
 		time_t t = time(NULL);
-		g->client[*pnum].last_heard = t;			// record last hard time
+		g->client[*pnum].last_heard = t;			// record last heard time
 	}
 	else {											// monitor mode case
 		time_t t = time(NULL);
 		*pnum = 0;									// there can be only one client
-		g->client[*pnum].last_heard = t;			// record last hard time
+		g->client[*pnum].last_heard = t;			// record last heard time
 	}
 
 	return(g);
