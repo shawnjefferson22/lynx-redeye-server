@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
 			/*****************/
 			/* In Game State */
 			/*****************/
-			if (g->logon == 0) {
+			if (!g->state.logon) {
 				while(1) {
 					process_game_packet(g, pnum, buf, buf[0]+2);
 					if (!check_buffer_for_more(buf, recvfrom_ret))
@@ -255,13 +255,6 @@ int main(int argc, char *argv[])
 				/* In Logon State */
 				/******************/
 				process_logon_packet(g, pnum, buf, buf[0]+2);
-
-				/*******************/
-				/* Send to Players */
-				/*******************/
-				//if ((g->num_players > 1) && !monitor_mode)	{				// don't even bother if only one player, or in monitor mode
-				//	send_to_other_clients(g, pnum, buf, recvfrom_ret);		// mirror this packet to other clients in game
-				//}
 			}
 		}
 
@@ -303,7 +296,7 @@ GAME_T *client_lookup(struct sockaddr_in *cliaddr, uint8_t *buf, uint8_t *pnum)
 
      		g = find_game_by_id(gid);							// find a game matching id that's in logon phase
      		// join a game in progress if in logon mode and not at max players already
-     		if (g && (g->logon) && (g->num_players != g->max_players)) {
+     		if (g && (g->state.logon) && (g->num_players != g->max_players)) {
        			join_game(g, cliaddr);
        			ui_log("SERVER Client %s:%d not found, joining game %04X %s\n", inet_ntoa(cliaddr->sin_addr), ntohs(cliaddr->sin_port), gid, *g->name);
        		}

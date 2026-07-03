@@ -181,7 +181,7 @@ void draw_game_stats()
     {
         game_count++;
         client_count += g->num_players;
-        if (g->logon)
+        if (g->state.logon)
         	logon_count++;
         else
         	running_count++;
@@ -247,7 +247,7 @@ void draw_games()
     while(g && row < GAMES_H - 1)
     {
         mvwprintw(win_games, row++, 1, "%04X %-40s  %-3d %-5s %1d%1d%1d%1d%1d%1d%1d%1d %1d%1d%1d%1d%1d%1d%1d%1d %4lu ms  %-6lu %4lu ms", g->game_id, *g->name,
-        		  g->num_players, (g->logon ? "LOGON" : "GAME"),
+        		  g->num_players, (g->state.logon ? "LOGON" : "GAME"),
         		  g->state.plr_data_recv[0][7], g->state.plr_data_recv[0][6], g->state.plr_data_recv[0][5], g->state.plr_data_recv[0][4],
         		  g->state.plr_data_recv[0][3], g->state.plr_data_recv[0][2], g->state.plr_data_recv[0][1], g->state.plr_data_recv[0][0],
         		  g->state.plr_data_recv[1][7], g->state.plr_data_recv[1][6], g->state.plr_data_recv[1][5], g->state.plr_data_recv[1][4],
@@ -265,7 +265,7 @@ void util_dump_bytes(const uint8_t *buff, uint32_t buff_size)
 
     for (int j = 0; j < buff_size; j += bytes_per_line) {
     	int offset = 0;
-        offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG %04X: ", j);
+        offset += snprintf(line + offset, sizeof(line) - offset, "PACKET: ");
 
         for (int k = 0; (k + j) < buff_size && k < bytes_per_line; k++) {
             offset += snprintf(line + offset, sizeof(line) - offset, "%02X ", buff[j + k]);
@@ -319,7 +319,7 @@ void print_logon_packet(const uint8_t *buff, uint32_t buff_size)
         offset += snprintf(line + offset, sizeof(line) - offset, "- Msg=%02X Plrs=%d player=%d\n", msg, popcount(plrs), countdown);
     else
         offset += snprintf(line + offset, sizeof(line) - offset, "- Msg=%02X Plrs=%d countdown=%d\n", msg, popcount(plrs), countdown);
-   
+
     ui_log("%s", line);
 }
 
@@ -346,6 +346,9 @@ void print_game_clients()
 
     g = games;
     while (g) {
+        ui_log("GAME #%d %04X %s --> State logon:%d rounds:%ld avg_round_time:%ld\n", g->instance, g->game_id, *g->name,
+                g->state.logon, g->rounds, g->avg_round_time);
+                
         for(i=0; i<g->num_players; i++) {
             time_t t = time(NULL);
             ui_log("GAME #%d %04X %s --> Client:%d %s:%d last_heard:%d recv_data:%d:%d\n", g->instance, g->game_id, *g->name, i,

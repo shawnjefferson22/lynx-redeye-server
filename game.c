@@ -49,7 +49,7 @@ GAME_LIST_T game_list[] = {
 	{0xE005, 2, "Relief Pitcher"},
 	{0xE006, 4, "Super Off-Road"},
 	// Non-Redeye Games
-	{0xE101, 4, "Awesome Golf"},									// games that don't use redeye (shouldn't ever see these)
+	{0xE101, 4, "Awesome Golf"},									// games that don't use redeye (shouldn't ever see these in this server)
 	{0xE102, 4, "Battlezone 2000"},									// including for completeness as these IDs are used in the
 	{0xE103, 4, "California Games"},								// Fujinet firmware
 	{0xE104, 6, "Championship Rally"},
@@ -61,7 +61,7 @@ GAME_LIST_T game_list[] = {
 	{0xE10A, 4, "Malibu Bikini Volleyball"},
 	{0xE10B, 2, "Ponx"},
 	// Generic ID used in some games (see remap above)
-	{0xFFFF, 0, "Generic game ID"}
+	{0xFFFF, 2, "Generic game ID"}
 };
 
 struct GAME_T *games;                   // games being played list
@@ -75,7 +75,7 @@ uint64_t get_time_ms()
     return (uint64_t)tv.tv_sec * 1000ULL + tv.tv_usec / 1000ULL;
 }
 
-// count bits set for player mask
+// helper to count bits set for player mask
 int popcount(uint8_t bits)
 {
     int count = 0;
@@ -88,6 +88,36 @@ int popcount(uint8_t bits)
     return count;
 }
 
+// helper to reset game state
+void reset_game_state(GAME_T *game)
+{
+	game->state.logon = true;
+	game->state.last_logon_plr = 255;
+	game->num_players = 1;						// an existing game always has at least one player
+
+	for(int i=0; i<MAX_PLAYERS; i++) {
+		game->state.plr_logon_sent[i] = 0;
+
+		game->state.plr_data_recv[0][i] = 0;
+		game->state.plr_data_recv[1][i] = 0;
+		game->state.seq_plr_data[0][i][0] = 0;
+		game->state.seq_plr_data[1][i][0] = 0;
+
+		for(int j=0; j<MAX_PLAYERS; j++) {
+			game->state.seq_plr_req[0][i][j] = 0;
+			game->state.seq_plr_req[1][i][j] = 0;
+		}
+	}
+
+	// clear timing counters	
+	game->game_start;
+	game->rounds = 0;
+	game->round_start = 0;
+	game->last_round_time = 0;
+	game->avg_round_time = 0;
+
+}
+
 
 /* find_game_in_game_list
  *
@@ -97,19 +127,13 @@ int popcount(uint8_t bits)
  */
 uint8_t find_game_in_game_list(uint16_t gid)
 {
-  uint8_t i;
+	uint8_t i;
 
-
-  i = 0;
-  while(1) {
-    if (game_list[i].game_id == gid)				// game found!
-      return(i);
-
-	if (game_list[i].game_id == 0xFFFF)			// game not found
-	  return(255);
-
-	i++;
-  }
+  	for(i=0; i<NUM_GAMES; i++) {
+    	if (game_list[i].game_id == gid)
+      	return(i);	// game found
+	}
+	return(255);	// game not found
 }
 
 
@@ -167,7 +191,7 @@ GAME_T *find_game_by_id(uint16_t id)
 
   while (g) {
 	// match the game id and check that it's in logon phase
-    if ((g->game_id == id) && (g->logon))
+    if ((g->game_id == id) && (g->state.logon))
       return(g);
 
     // try next game
@@ -181,7 +205,7 @@ GAME_T *find_game_by_id(uint16_t id)
 
 /* find_client_in_game
  *
- * Finds a client by address within a specific game.  Returns 255 if not found.
+ * Finds a client by address within a specific game. Return client array index. Returns 255 if not found.
  */
 uint8_t find_client_in_game(GAME_T *game, struct sockaddr_in* addr)
 {
@@ -237,38 +261,47 @@ GAME_T *create_new_game(uint16_t game_id, struct sockaddr_in* addr)
   	// setup new game
   	newgame->game_id = game_id;				// game ID from logon packet
   	newgame->instance = game_instance++;	// unique game instance number across all games
-  	newgame->logon = 1;						// logon phase starts every game
-  	newgame->num_players = 1;				// we have one player, the player who starts the game
+  	//newgame->state.logon = true;			// logon phase starts every game
+  	//newgame->num_players = 1;				// we have one player, the player who starts the game
 
-  	i = find_game_in_game_list(game_id); 					// find name and max_players for this game
-  	if (i != 255) {
-		newgame->max_players = game_list[i].max_players;
-		newgame->name = &game_list[i].name;
+  	i = find_game_in_game_list(game_id); 	// find name and max_players for this game
+  	if (i == 255) {							// not found, something went wrong
+		return(NULL);
   	}
+
+	// Get game info from game list
+	newgame->max_players = game_list[i].max_players;
+	newgame->name = &game_list[i].name;
 
 	// clear client info
   	newgame->client[0].last_heard = time(NULL);
   	memcpy((void *) &(newgame->client[0].client_addr), (void *) addr, sizeof(struct sockaddr_in));
 
-	// clear the game state
-  	for (i=0; i<MAX_PLAYERS; i++) {
-		newgame->state.plr_data_recv[0][i] = 0;
-		newgame->state.plr_data_recv[1][i] = 0;
-
-		memset(newgame->state.seq_plr_data[0][i], 0, BUF_SIZE);
-		memset(newgame->state.seq_plr_data[1][i], 0, BUF_SIZE);
-	}
-
-	// reset timing stats
-	newgame->rounds = 0;
+	// initialize timing counters	
+	/*newgame->rounds = 0;
 	newgame->game_start = 0;
 	newgame->round_start = 0;
 	newgame->last_round_time = 0;
 	newgame->avg_round_time = 0;
+	*/
+
+	// clear the game state
+  	reset_game_state(newgame);
+	
+	/*for (i=0; i<MAX_PLAYERS; i++) {
+		newgame->state.plr_data_recv[0][i] = 0;
+		newgame->state.plr_data_recv[1][i] = 0;
+		memset(newgame->state.seq_plr_data[0][i], 0, BUF_SIZE);
+		memset(newgame->state.seq_plr_data[1][i], 0, BUF_SIZE);
+	
+
+
+	}
+	newgame->state.last_logon_plr = 255;*/
 
   	/* DEBUGGING */
   	#ifdef DEBUG
-  	ui_log("DEBUG new_game:%d %d %d\n", newgame->game_id, newgame->logon, newgame->num_players);
+  	ui_log("DEBUG new_game:%d %d %d\n", newgame->game_id, newgame->state.logon, newgame->num_players);
   	ui_log("DEBUG client[0] %f %s:%d\n", newgame->client[0].last_heard, inet_ntoa(newgame->client[0].client_addr.sin_addr), ntohs(newgame->client[0].client_addr.sin_port));
 	#endif
 
@@ -288,8 +321,12 @@ void join_game(GAME_T *game, struct sockaddr_in* addr)
   if (!game)
     return;
 
+  // Game already at max players?
+  if (game->num_players >= game->max_players)
+  	return;
+
   // Don't allow a client to join a game in progress, must be in logon phase
-  if (game->logon) {
+  if (game->state.logon) {
     	memcpy((void *) &(game->client[game->num_players].client_addr), (void *) addr, sizeof(struct sockaddr_in));
 		game->client[game->num_players].last_heard = time(NULL);
     	game->num_players++;
@@ -322,7 +359,7 @@ uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t
 
 	    // *** DEBUGGING ***
 	    #ifdef DEBUG
-      	ui_log("DEBUG Sending to %s:%d\n", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
+      	ui_log("DEBUG Sending to %s:%d ", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
       	util_dump_bytes(packet, psize);
 		#endif
 
@@ -350,7 +387,7 @@ void handle_client_timeout() {
   GAME_T *g;
   GAME_T *lg;       // pointer to previous game
   uint8_t i,j;
-  time_t t;       // time interval to now
+  time_t t;       	// time interval to now
 
 
   t = time(NULL);
@@ -366,7 +403,7 @@ void handle_client_timeout() {
           			memcpy(&g->client[j], &g->client[j+1], sizeof(CLIENT_T));
         		}
 				i--;
-        	g->num_players--;
+        		g->num_players--;
 			}
       	}
     }
@@ -416,8 +453,30 @@ bool check_data_recv(struct GAME_T *game)
 }
 
 
+/* check_request_sent
+ * 
+ * checks if we have sent a request, and how long ago. Returns true if we should send/resend, false if not.
+ *  
+ */
+bool check_req_sent(struct GAME_T *game, uint8_t seq, uint8_t from_plr, uint8_t for_plr)
+{
+	uint64_t now = get_time_ms();
+
+	// have we sent this request yet?
+	if ((now - game->state.seq_plr_req[seq][from_plr][for_plr]) > REQ_BACKOFF_TIME)
+		return true;
+	else
+		return false;
+}
+
+
+
 /* process_logon_packet
  *
+ * Process the logon packet in this game, from client index pnum. Packet is in buf, real size is in buff_size.
+ *
+ * MSG type 0: logon annoucement packet from client
+ * MSG type 2: game is starting, client set timers
  *
 */
 void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, uint32_t buff_size)
@@ -426,7 +485,7 @@ void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf,
 
 
 	// Were not in the logon phase
-	if (!game->logon)
+	if (!game->state.logon)
 		return;
 
 	// Doesn't look like a logon packet
@@ -436,7 +495,7 @@ void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf,
 	}
 
 	#ifdef PKTDEBUG
-	print_logon_packet(buf, buf[0]+2);
+	print_logon_packet(buf, buff_size);
 	#endif
 
 	// Extract number of players logged in
@@ -449,24 +508,26 @@ void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf,
 	switch (msg) {
 		case 2:					// game is starting
 			ui_log("GAME #%d %04X %s --> Game starting in %d\n", game->instance, game->game_id, *game->name, countdown);
-			if ((countdown == 1) && monitor_mode) {
-				game->logon = 0;
-				ui_log("GAME #%d %04X %s --> Logon ended, players: %d \n", game->instance, game->game_id, *game->name, game->num_players);
 
+			// In case we miss any of the start game timer messages, just end the logon phase now if we're not in monitor mode
+			if ((countdown == 1) && monitor_mode) {
+				game->state.logon = false;
+				game->state.last_logon_plr = 255;
 				game->game_start = get_time_ms();
 				game->round_start = get_time_ms();
+
+				ui_log("GAME #%d %04X %s --> Logon ended, players: %d\n", game->instance, game->game_id, *game->name, game->num_players);
 			}
 			else {
-				game->logon = 0;
-				ui_log("GAME #%d %04X %s --> Logon ended, players: %d \n", game->instance, game->game_id, *game->name, game->num_players);
-
+				game->state.logon = false;
+				game->state.last_logon_plr = 255;
 				game->game_start = get_time_ms();
 				game->round_start = get_time_ms();
-	
+				ui_log("GAME #%d %04X %s --> Logon ended, players: %d\n", game->instance, game->game_id, *game->name, game->num_players);
 			}
 			break;
 
-		case 0:
+		case 0:				// logon announcement packet
 			if (game->num_players < plrs) {
 				ui_log("GAME #%d %04X %s --> Logon new player %d\n", game->instance, game->game_id, *game->name, countdown);
 
@@ -482,11 +543,23 @@ void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf,
 				#ifdef DEBUG
 				ui_log("GAME #%d %04X %s --> suppressing logon message from %d\n", game->instance, game->game_id, *game->name, countdown);
 				#endif
-				return;	
+				return;
 			}
 			else {
-				game->state.plr_logon_sent[countdown] = 5;
+				game->state.plr_logon_sent[countdown] = LOGON_SUPPRESS;
 			}
+			break;
+
+			// Don't spam other players with logon messages (might need a timer as well?)
+			/*if (game->state.last_logon_plr == pnum) {
+				//#ifdef DEBUG
+				ui_log("GAME #%d %04X %s --> suppressing logon message from %d\n", game->instance, game->game_id, *game->name, countdown);
+				//#endif
+				return;
+			}
+			else {
+				game->state.last_logon_plr = pnum;
+			}*/
 			break;
 	}
 
@@ -505,122 +578,174 @@ void process_logon_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf,
  */
 void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, uint32_t buff_size)
 {
-	uint8_t msg, plr, seq;
+	uint8_t msg, plr, seq, realsize;
 
 	// Parse header dataq
+	realsize = buf[0]+2;
 	msg = buf[1] & 0x07;
 	plr = (buf[1] & 0x78) >> 3;
 	seq = (buf[1] & 0x80) ? 1 : 0;
 
+	#ifdef PKTDEBUG
+	print_game_packet(buf, realsize);
+	#endif
+
 	// What msg type is it?
 	switch(msg) {
-		case 0:		// Logon packet
+		/*case 0:		// Logon packet
 			if (buf[0] == 5) {		// looks like we're back in logon, pressed restart?
-				game->logon = 1;
-				game->rounds = 0;
-				game->avg_round_time = 0;
+				reset_game_state(game);
+				//game->state.logon = true;
+				//game->rounds = 0;
+				//game->avg_round_time = 0;
 				ui_log("GAME #%d %04X %s --> RESTART logon packet received, back in logon mode\n", game->instance, game->game_id, *game->name);
 			}
-			break;
+			break; */
 		case 3:		// Data packet
 			game->state.plr_data_recv[seq][plr] = 1;
-			memcpy(game->state.seq_plr_data[seq][plr], buf, buff_size);
+			memcpy(game->state.seq_plr_data[seq][plr], buf, realsize);
+			ui_log("GAME #%d %04X %s --> DATA player %d data for seq %d - header:%08b, data size:%d\n", game->instance, game->game_id, *game->name, 
+					plr, seq, buf[1], buf[0]);
 
-			#ifdef PKTDEBUG
-			print_game_packet(buf, buf[0]+2);
-			#endif
+			// Deal with sequence switch, all data received and we see a new seq #?
+			if (check_data_recv(game)) {
+				for (uint8_t i=0; i<game->num_players; i++) {
+					// clear player data received status for current sequence
+					game->state.plr_data_recv[0][i] = 0;
+					game->state.plr_data_recv[1][i] = 0;
 
-			ui_log("GAME #%d %04X %s --> DATA player %d data for seq %d - header:%08b, data size:%d\n", game->instance, game->game_id, *game->name, plr, seq, buf[1], buf[0]);
+					// clear player data for current sequence
+					memset(game->state.seq_plr_data[0][i], 0, BUF_SIZE);
+					memset(game->state.seq_plr_data[1][i], 0, BUF_SIZE);
+				}
+
+				// measure sequence time
+				game->rounds++;
+				if (game->round_start) {
+					uint64_t now = get_time_ms();
+
+					game->last_round_time = (now - game->round_start);
+					game->avg_round_time = (now - game->game_start) / game->rounds;
+					game->round_start = now;
+				}
+
+				ui_log("GAME #%d %04X %s --> SEQ Full sequence starting, last sequence time: %lu ms\n", game->instance, game->game_id, *game->name, game->last_round_time);
+			}
 			break;
+		
 		case 4:		// SendData Req
+			// Suppress repeated requests for data
+			if (!check_req_sent(game, seq, pnum, plr)) {
+				ui_log("GAME #%d %04X %s --> REQUEST player %d for seq %d, player %d - header:%08b - backoff:%ld\n", game->instance, game->game_id, *game->name, 
+						pnum, seq, plr, buf[1], (get_time_ms() - game->state.seq_plr_req[seq][pnum][plr]));
+				return;
+			}
+			else
+				game->state.seq_plr_req[seq][pnum][plr] = get_time_ms();
+			
+			// Do we have the data at the server?
 			if (game->state.plr_data_recv[seq][plr]) {
-				ui_log("GAME #%d %04X %s --> REQUEST player %d data for seq %d, server has it\n", game->instance, game->game_id, *game->name, plr, seq);
+				ui_log("GAME #%d %04X %s --> REQUEST player %d for seq %d player %d, server has it - header:%08b\n", game->instance, game->game_id, *game->name, 
+						pnum, seq, plr, buf[1]);
 
 				if (!monitor_mode) {
-					resend_data_to_clients(game, plr, game->state.seq_plr_data[seq][plr], game->state.seq_plr_data[seq][plr][0]+2);
-					return;
+					//resend_data_to_client(game, pnum, game->state.seq_plr_data[seq][plr], game->state.seq_plr_data[seq][plr][0]+2);
+					//return;
 				}
 			}
 			else {
-				ui_log("GAME #%d %04X %s --> REQUEST player %d data for seq %d, server doesn't have it\n", game->instance, game->game_id, *game->name, plr, seq);
-			}
-			break;
-		case 5:		// Master Resend Req
-			ui_log("GAME #%d %04X %s --> REQUEST Master Resend by player %d, seq %d, player mask %08b\n", game->instance, game->game_id, *game->name, plr, seq, buf[2]);
-			if (!monitor_mode) {
-				master_resend_data(game, seq, buf[2]);
+				ui_log("GAME #%d %04X %s --> REQUEST player %d for seq %d player %d, server doesn't have it - header:%08b\n", game->instance, game->game_id, *game->name, 
+						pnum, seq, plr, buf[1]);
+				// just send request to player whose data is needed
+				resend_data_to_client(game, plr, buf, realsize);
 				return;
 			}
 			break;
+		
+		case 5:		// Master Resend Req
+			ui_log("GAME #%d %04X %s --> REQUEST Master resend request by player %d, seq %d, player mask %08b\n", game->instance, game->game_id, *game->name, 
+					plr, seq, buf[2]);
+			/*if (!monitor_mode) {
+				if (valid_sequence_data(game, seq, buf[2])) {				// server can send if we have valid data
+					master_resend_data(game, seq, buf[2]);
+					return;
+				}
+			}*/
+			break;
 	}
-
-	// Deal with sequence switch, all data received and we see a new seq #?
-	if (check_data_recv(game)) {
-		for (uint8_t i=0; i<game->num_players; i++) {
-			// clear player data received status for current sequence
-			game->state.plr_data_recv[0][i] = 0;
-			game->state.plr_data_recv[1][i] = 0;
-
-			// clear player data for current sequence
-			//memset(game->state.seq_plr_data[0][i], 0, BUF_SIZE);				// we actually want to hang onto this data for master resend
-			//memset(game->state.seq_plr_data[1][i], 0, BUF_SIZE);
-		}
-
-		// measure sequence time
-		game->rounds++;
-		if (game->round_start) {
-			game->last_round_time = (get_time_ms() - game->round_start);
-			game->avg_round_time = (get_time_ms() - game->game_start) / game->rounds;
-			game->round_start = get_time_ms();
-		}
-
-		ui_log("GAME #%d %04X %s --> SEQ Full sequence starting, last sequence time: %lu ms\n", game->instance, game->game_id, *game->name, game->last_round_time);
-	}
-
 
 	/*******************/
 	/* Send to Players */
 	/*******************/
 	if ((game->num_players > 1) && !monitor_mode)	{					// don't even bother if only one player, or in monitor mode
-		send_to_other_clients(game, pnum, buf, buff_size);				// mirror this packet to other clients in game
+		send_to_other_clients(game, pnum, buf, realsize);				// mirror this packet to other clients in game
 	}
 }
 
 
-/* resend_data_to_clients
+/* resend_data_to_client
  *
  * A resend request was seen, but we have the data, so we can just send it ourselves.
  * Don't send to the player whose data we requested.
  */
-uint8_t resend_data_to_clients(struct GAME_T *game, uint8_t req_player, uint8_t *packet, uint8_t psize)
+uint8_t resend_data_to_client(struct GAME_T *game, uint8_t req_player, const uint8_t *packet, uint8_t psize)
 {
-  uint8_t i;
-  uint8_t sendto_ret;
-  socklen_t clilen;
+  	//uint8_t i;
+  	ssize_t sendto_ret;
+  	socklen_t clilen;
 
-  // Check valid game
-  if (!game)
-    return(0);
+  	// Check valid game
+  	if (!game)
+    	return(0);
 
-  // iterate through client list
-  for(i=0; i<game->num_players; i++) {
-    if (i != req_player) {	 					// don't send to the player who would be resending
-      	clilen = sizeof(game->client[i].client_addr);
-	    sendto_ret = sendto(sockfd, packet, psize, 0, (struct sockaddr*) &(game->client[i].client_addr), clilen);
+    clilen = sizeof(game->client[req_player].client_addr);
+	sendto_ret = sendto(sockfd, packet, psize, 0, (struct sockaddr*) &(game->client[req_player].client_addr), clilen);
 
-	    // *** DEBUGGING ***
-	    #ifdef DEBUG
-      	ui_log("DEBUG resending to %s:%d", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
-      	util_dump_bytes(packet, psize);
-		#endif
+	// *** DEBUGGING ***
+	#ifdef DEBUG
+    ui_log("DEBUG sending to %s:%d ", inet_ntoa(game->client[req_player].client_addr.sin_addr), ntohs(game->client[req_player].client_addr.sin_port));
+    util_dump_bytes(packet, psize);
+	#endif
 
-	    if (sendto_ret < 0) {
-        	perror("sendto failed");
-      	}
+	if (sendto_ret < 0) {
+        perror("sendto failed");
+		return(0);
     }
-  }
 
-  return(1);
+  	return(1);
+}
+
+
+
+
+/* valid sequence data
+ *
+ * Check that we have valid data for the players requested (we may not immediately)
+ */
+bool valid_sequence_data(GAME_T *game, uint8_t seq, uint8_t player_mask)
+{
+	uint8_t plr;
+
+	// Check valid game
+	if (!game)
+		return(0);
+
+	// iterate through player mask
+	plr = 0;
+	while (player_mask) {
+		if ((player_mask & 0x01) && (plr < game->num_players)) {
+			if (game->state.seq_plr_data[seq][plr][0] == 0) {
+				ui_log("GAME #%d %04X %s --> REQUEST Master resend request seq %d, player mask %08b - valid_sequence_data check failed\n", game->instance, game->game_id, 
+						*game->name, seq, player_mask);
+				return false;
+			}
+  		}
+
+   		player_mask = player_mask >> 1;		// next bit in mask
+   		plr++;								// increment player #
+	}
+
+  return(true);
 }
 
 
@@ -651,7 +776,7 @@ uint8_t master_resend_data(struct GAME_T *game, uint8_t seq, uint8_t player_mask
 
 	    			// *** DEBUGGING ***
 	    			#ifdef DEBUG
-      				ui_log("DEBUG master resending to %s:%d", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
+      				ui_log("DEBUG master resending to %s:%d ", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
       				util_dump_bytes(game->state.seq_plr_data[seq][plr], game->state.seq_plr_data[seq][plr][0]+2);
 					#endif
 
@@ -660,10 +785,10 @@ uint8_t master_resend_data(struct GAME_T *game, uint8_t seq, uint8_t player_mask
       				}
     			}
 			}
-
-    		player_mask = player_mask >> 1;		// next bit in mask
-    		plr++;								// increment player #
   		}
+
+   		player_mask = player_mask >> 1;		// next bit in mask
+   		plr++;								// increment player #
 	}
 
   return(1);
