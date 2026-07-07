@@ -425,7 +425,7 @@ void write_games_html(FILE *f)
         "</head>\n"
         "<body>\n"
 
-        "<h1>Running Games</h1>\n"
+        "<h1>Lynx Fujinet Redeye Server - Running Games</h1>\n"
 
         "<div class=\"summary\">\n"
         "<b>Last updated:</b> %s<br>\n"
