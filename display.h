@@ -24,4 +24,8 @@ void print_logon_packet(const uint8_t *buff, uint32_t buff_size);
 void print_stats();
 void print_game_clients();
 
+// html output
+void write_games_html(FILE *f);
+void update_games_html(void);
+
 #endif

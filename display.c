@@ -358,3 +358,139 @@ void print_game_clients()
         g = g->next;
     }
 }
+
+
+void write_games_html(FILE *f)
+{
+    time_t now = time(NULL);
+    struct tm tm;
+    char timestr[64];
+
+    gmtime_r(&now, &tm);
+    strftime(timestr, sizeof(timestr),
+             "%Y-%m-%d %H:%M:%S UTC", &tm);
+
+    /* Count totals */
+    int game_count = 0;
+    int player_count = 0;
+
+    for (GAME_T *g = games; g; g = g->next)
+    {
+        game_count++;
+        player_count += g->num_players;
+    }
+
+    fprintf(f,
+        "<!DOCTYPE html>\n"
+        "<html>\n"
+        "<head>\n"
+        "<meta charset=\"UTF-8\">\n"
+        "<meta http-equiv=\"refresh\" content=\"5\">\n"
+        "<title>Game Server Status</title>\n"
+        "<style>\n"
+        "body {"
+        "  font-family: Arial, Helvetica, sans-serif;"
+        "  background:#202124;"
+        "  color:#e8eaed;"
+        "  margin:20px;"
+        "}\n"
+        "h1 { margin-bottom: 0.2em; }\n"
+        ".summary {"
+        "  margin-bottom:20px;"
+        "  padding:10px;"
+        "  background:#303134;"
+        "  border-radius:4px;"
+        "}\n"
+        "table {"
+        "  border-collapse:collapse;"
+        "  width:100%%;"
+        "}\n"
+        "th, td {"
+        "  border:1px solid #555;"
+        "  padding:6px 8px;"
+        "}\n"
+        "th {"
+        "  background:#3c4043;"
+        "}\n"
+        "td.num {"
+        "  text-align:right;"
+        "}\n"
+        "td.center {"
+        "  text-align:center;"
+        "}\n"
+        "code {"
+        "  font-family:monospace;"
+        "}\n"
+        "</style>\n"
+        "</head>\n"
+        "<body>\n"
+
+        "<h1>Running Games</h1>\n"
+
+        "<div class=\"summary\">\n"
+        "<b>Last updated:</b> %s<br>\n"
+        "<b>Games:</b> %d<br>\n"
+        "<b>Players:</b> %d\n"
+        "</div>\n",
+
+        timestr,
+        game_count,
+        player_count);
+
+    fprintf(f,
+        "<table>\n"
+        "<tr>"
+        "<th>ID</th>"
+        "<th>Name</th>"
+        "<th>Players</th>"
+        "<th>State</th>"
+        "<th>Seq Time</th>"
+        "<th>Rounds</th>"
+        "<th>Avg Seq Time</th>"
+        "</tr>\n");
+
+    for (GAME_T *g = games; g; g = g->next)
+    {
+        fprintf(f,
+            "<tr>"
+            "<td class=\"num\">%04X</td>"
+            "<td>%s</td>"
+            "<td class=\"num\">%d</td>"
+            "<td>%s</td>"
+
+            "<td class=\"num\">%lu ms</td>"
+            "<td class=\"num\">%lu</td>"
+            "<td class=\"num\">%lu ms</td>"
+            "</tr>\n",
+
+            g->game_id,
+            *g->name,
+            g->num_players,
+            g->state.logon ? "LOGON" : "GAME",
+
+            g->last_round_time,
+            g->rounds,
+            g->avg_round_time);
+    }
+
+    fprintf(f,
+        "</table>\n"
+        "</body>\n"
+        "</html>\n");
+}
+
+void update_games_html(void)
+{
+    const char *tmpfile = "/var/www/html/games.tmp";
+    const char *outfile = "/var/www/html/games.html";
+
+    FILE *f = fopen(tmpfile, "w");
+    if (!f)
+        return;
+
+    write_games_html(f);
+    fclose(f);
+
+    /* Atomic replace */
+    rename(tmpfile, outfile);
+}

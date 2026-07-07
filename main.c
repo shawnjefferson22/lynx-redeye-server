@@ -176,6 +176,9 @@ int main(int argc, char *argv[])
 			break;
 		}
 
+		// update the HTML file with game status
+		update_games_html();
+
 		// handle keypressed
 		if (FD_ISSET(STDIN_FILENO, &readfds)) {
 			int c = getch();
@@ -254,7 +257,9 @@ int main(int argc, char *argv[])
 				/******************/
 				/* In Logon State */
 				/******************/
-				process_logon_packet(g, pnum, buf, buf[0]+2);
+				// logon ended, and game starting?
+				if (check_logon_state(g))
+					process_logon_packet(g, pnum, buf, buf[0]+2);
 			}
 		}
 
