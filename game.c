@@ -676,13 +676,14 @@ void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, 
 				game->state.seq_plr_req[seq][pnum][plr] = get_time_ms();
 			
 			// Do we have the data at the server?
+			// still haven't figured out how we determine at the server if we have valid data
 			if (game->state.plr_data_recv[seq][plr]) {
 				ui_log("GAME #%d %04X %s --> REQUEST player %d for player %d seq %d server has it - header:%08b\n", game->instance, game->game_id, *game->name, 
 						pnum, plr, seq, buf[1]);
 
 				if (!monitor_mode) {
-					send_data_to_client(game, pnum, game->state.seq_plr_data[seq][plr], game->state.seq_plr_data[seq][plr][0]+2);
-					return;
+					//send_data_to_client(game, pnum, game->state.seq_plr_data[seq][plr], game->state.seq_plr_data[seq][plr][0]+2);
+					//return;
 				}
 			}
 			else {
