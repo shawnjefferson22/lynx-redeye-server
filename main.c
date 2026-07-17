@@ -18,6 +18,8 @@
 
 int sockfd;				// Socket File Descriptor
 bool monitor_mode = false;
+bool verbose_log = false;
+bool packet_log = false;
 FILE *fp;
 const char *log_file = "reserver-monitor.log";
 
@@ -114,7 +116,7 @@ int main(int argc, char *argv[])
     // Create socket
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
-        perror("socket creation failed");
+        ui_log("SERVER - socket creation failed\n");
         return 1;
     }
 
@@ -128,7 +130,7 @@ int main(int argc, char *argv[])
 
     if (bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0)
     {
-        perror("bind failed");
+        ui_log("SERVER - bind failed\n");
         return 1;
     }
 
@@ -172,7 +174,7 @@ int main(int argc, char *argv[])
 			if (errno == EINTR)
 				continue;
 
-			perror("select failed");
+			ui_log("SERVER - select failed\n");
 			break;
 		}
 
@@ -196,6 +198,12 @@ int main(int argc, char *argv[])
 				case 'l':
 					print_game_clients();
 					break;
+				case 'v':
+					verbose_log = !verbose_log;
+					break;
+				case 'p':
+					packet_log = !packet_log;
+					break;
 			}
 		}
 
@@ -208,7 +216,7 @@ int main(int argc, char *argv[])
 
 			int recvfrom_ret = recvfrom(sockfd, buf, BUF_SIZE, 0, (struct sockaddr*)&cliaddr, &clilen);
 			if (recvfrom_ret < 0) {
-				perror("recvfrom failed");
+				ui_log("SERVER - recvfrom failed\n");
 				continue;
 			}
 
