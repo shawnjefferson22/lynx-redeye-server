@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -36,6 +37,64 @@ time_t start;
 long long start_ms;
 bool stats_printed = true;
 
+/* signal flag for resize */
+static void handle_resize(void)
+{
+    int rows, cols;
+
+    /* update curses internal sizes */
+    getmaxyx(stdscr, rows, cols);
+    resizeterm(rows, cols);
+
+    log_h = rows - (TITLE_H + STATS_H + GAMES_H) - 1;
+    if (log_h < 3)
+        log_h = 3;
+    half = cols / 2;
+
+    if (win_stats)
+        wresize(win_stats, STATS_H, half);
+    else
+        win_stats = newwin(STATS_H, half, TITLE_H, 0);
+    mvwin(win_stats, TITLE_H, 0);
+
+    if (win_packets)
+        wresize(win_packets, STATS_H, cols - half);
+    else
+        win_packets = newwin(STATS_H, cols - half, TITLE_H, half);
+    mvwin(win_packets, TITLE_H, half);
+
+    if (win_games)
+        wresize(win_games, GAMES_H, cols);
+    else
+        win_games = newwin(GAMES_H, cols, TITLE_H + STATS_H, 0);
+    mvwin(win_games, TITLE_H + STATS_H, 0);
+
+    if (win_log)
+        wresize(win_log, log_h, cols);
+    else
+        win_log = newwin(log_h, cols, TITLE_H + STATS_H + GAMES_H, 0);
+    mvwin(win_log, TITLE_H + STATS_H + GAMES_H, 0);
+
+    /* redraw title, legend and borders without clearing entire screen to reduce flicker */
+    draw_title();
+    draw_legend();
+
+    box(win_stats, 0, 0);
+    box(win_packets, 0, 0);
+    box(win_games, 0, 0);
+    box(win_log, 0, 0);
+
+    wrefresh(win_stats);
+    wrefresh(win_packets);
+    wrefresh(win_games);
+    wrefresh(win_log);
+}
+
+/* public wrapper to trigger resize handling (callable from other files) */
+void display_resize(void)
+{
+    handle_resize();
+}
 
 
 void display_init()
@@ -46,15 +105,18 @@ void display_init()
 	curs_set(0);
 	setlocale(LC_ALL, "");
 
+    /* enable keypad so getch() returns KEY_RESIZE on terminal resize */
+    keypad(stdscr, TRUE);
+
     // get start time for log display
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
-    long long start_ms = (long long)ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
+    start_ms = (long long)ts.tv_sec * 1000LL + ts.tv_nsec / 1000000;
 
-    // screen dimensions
+    	// screen dimensions
 	int rows, cols;
 	getmaxyx(stdscr, rows, cols);
-	log_h = rows - (TITLE_H + STATS_H + GAMES_H);
+	log_h = rows - (TITLE_H + STATS_H + GAMES_H) - 1;
 	half = cols / 2;
 
 	// create windows
@@ -68,11 +130,16 @@ void display_init()
 	box(win_packets, 0, 0);
 	box(win_games, 0, 0);
 	box(win_log, 0, 0);
+
+	draw_legend();
+
+    /* no SIGWINCH handler; manual redraw via 'r' works reliably */
 }
 
 
 void ui_refresh()
 {
+    /* no automatic SIGWINCH handling; manual redraw via 'r' or periodic refresh */
 	static struct timespec last_ui = {0};
 
 	struct timespec now;
@@ -132,10 +199,30 @@ void clear_log()
 }
 
 
+void draw_legend()
+{
+    char legend[] = " q Quit   r Redraw Screen   c Clear Log   v Verbose Log   p Packet Log   s Print Stats   l List Clients";
+    int row = LINES - 1;
+    int len = strlen(legend);
+    int col = (COLS - len) / 2;
+
+    attron(A_REVERSE);
+
+    /* Fill the entire bottom line with reversed spaces */
+    mvhline(row, 0, ' ', COLS);
+
+    /* Print centered legend */
+    mvprintw(row, (col > 0) ? col : 0, "%s", legend);
+
+    attroff(A_REVERSE);
+}
+
+
 void draw_title()
 {
     int rows, cols;
     getmaxyx(stdscr, rows, cols);
+    (void) rows;
 
     const char *title = "Lynx RedEye Server v1.1";
 
@@ -148,6 +235,7 @@ void draw_title()
 
     refresh();
 }
+
 
 void draw_log()
 {
@@ -206,7 +294,7 @@ void draw_packet_stats()
     mvwprintw(win_packets, 0, 2, "PACKET STATS");
 
 	// cacluate percentages
-    float mal_percent, bad_percent = 0;
+    float mal_percent = 0, bad_percent = 0;
 
 	if (stats.malformed)
 		mal_percent = ((float) stats.malformed / (float) (stats.good_checksum+stats.malformed+stats.bad_checksum)) * 100;
@@ -260,14 +348,14 @@ void draw_games()
 
 void util_dump_bytes(const uint8_t *buff, uint32_t buff_size)
 {
-    int bytes_per_line = 16;
+    uint32_t bytes_per_line = 16;
     char line[128];
 
-    for (int j = 0; j < buff_size; j += bytes_per_line) {
+    for (uint32_t j = 0; j < buff_size; j += bytes_per_line) {
     	int offset = 0;
         offset += snprintf(line + offset, sizeof(line) - offset, "PACKET: ");
 
-        for (int k = 0; (k + j) < buff_size && k < bytes_per_line; k++) {
+        for (uint32_t k = 0; (k + j) < buff_size && k < bytes_per_line; k++) {
             offset += snprintf(line + offset, sizeof(line) - offset, "%02X ", buff[j + k]);
         }
 
@@ -279,11 +367,11 @@ void util_dump_bytes(const uint8_t *buff, uint32_t buff_size)
 void print_game_packet(const uint8_t *buff, uint32_t buff_size)
 {
     char line[256];
-    int offset = 0;
+    uint32_t offset = 0;
 
     offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG GAME PKT: ");
     // hex dump (single line)
-    for (int j = 0; j < buff_size && offset < sizeof(line); j++) {
+    for (uint32_t j = 0; j < buff_size && offset < sizeof(line); j++) {
         offset += snprintf(line + offset, sizeof(line) - offset, "%02X ", buff[j]);
     }
 
@@ -301,11 +389,11 @@ void print_game_packet(const uint8_t *buff, uint32_t buff_size)
 void print_logon_packet(const uint8_t *buff, uint32_t buff_size)
 {
     char line[256];
-    int offset = 0;
+    uint32_t offset = 0;
 
     offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG LOGON PKT: ");
     // hex dump (single line)
-    for (int j = 0; j < buff_size && offset < sizeof(line); j++) {
+    for (uint32_t j = 0; j < buff_size && offset < sizeof(line); j++) {
         offset += snprintf(line + offset, sizeof(line) - offset, "%02X ", buff[j]);
     }
 
@@ -348,11 +436,11 @@ void print_game_clients()
     while (g) {
         ui_log("GAME #%d %04X %s --> State logon:%d rounds:%ld avg_round_time:%ld\n", g->instance, g->game_id, *g->name,
                 g->state.logon, g->rounds, g->avg_round_time);
-                
+
         for(i=0; i<g->num_players; i++) {
             time_t t = time(NULL);
-            ui_log("GAME #%d %04X %s --> Client:%d %s:%d last_heard:%d recv_data:%d:%d\n", g->instance, g->game_id, *g->name, i,
-                    inet_ntoa(g->client[i].client_addr.sin_addr), ntohs(g->client[i].client_addr.sin_port),
+            ui_log("GAME #%d %04X %s --> Client:%d %s:%d player_num: %d last_heard:%d recv_data:%d:%d\n", g->instance, g->game_id, *g->name, i,
+                    inet_ntoa(g->client[i].client_addr.sin_addr), ntohs(g->client[i].client_addr.sin_port), g->client[i].player_num,
                     (t - g->client[i].last_heard), g->state.plr_data_recv[0][i], g->state.plr_data_recv[1][i]);
         }
         g = g->next;

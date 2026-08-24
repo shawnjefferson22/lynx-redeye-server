@@ -24,38 +24,7 @@ FILE *fp;
 const char *log_file = "reserver-monitor.log";
 
 
-extern uint8_t calc_checksum(uint8_t *buf);
 extern bool check_buffer_for_more(uint8_t *buf, uint8_t bufsize);
-
-
-/* Calculate checksum of redeye packet, return true if good, false if not
- *
- * Checksum calculation is 255 - size, message
- */
-uint8_t calc_checksum(uint8_t *buf)
-{
-	uint16_t ck;
-	uint8_t i, sz;
-
-
-	sz = buf[0];
-	ck = 255;
-	for(i=0; i<sz+1; i++)
-	  ck -= buf[i];
-    ck = (ck & 0xFF);			// only one byte
-
-	if ((uint8_t) ck == buf[sz+1])
-	  return 1;
-	else {
-		#ifdef DEBUG
-	 	ui_log("DEBUG - packet failed checksum! %02X %d %02X", (ck & 0xFF), sz, buf[sz+1]);
-	 	util_dump_bytes(buf, sz+2);
-	 	#endif
-
-	 return 0;
-    }
-}
-
 
 /*
  * Ugly hack for case if UDP stream is concatenating packets
@@ -88,7 +57,7 @@ int main(int argc, char *argv[])
 	uint8_t buf[BUF_SIZE];				// packet buffer
 	struct GAME_T *g;
     uint8_t pnum;						// player number
-    uint16_t gid;						// game id
+    //uint16_t gid;						// game id
     uint8_t i;
 	bool running;
 
@@ -96,15 +65,22 @@ int main(int argc, char *argv[])
     // Handle arguments
     if (argc < 2 || (strcmp(argv[1], "-h") == 0))
     {
-        fprintf(stderr, "Usage: %s <port> [-l logfile] [-monitor]\n", argv[0]);
+        fprintf(stderr, "Usage: %s <port> [-l logfile] [-monitor] [-v] [-p]\n", argv[0]);
         return 1;
     }
     int port = atoi(argv[1]);
 
-    // monitor mode?
+    // Parse arguments
     for (i=2; i<argc; i++) {
 		if (strcmp(argv[i], "-monitor") == 0)
 			monitor_mode = true;
+
+		if ((strcmp(argv[i], "-v") == 0))
+			verbose_log = true;
+
+		if ((strcmp(argv[i], "-p") == 0))
+			packet_log = true;
+
 
 		if ((strcmp(argv[i], "-l") == 0) && ((i+1) < argc))
 			log_file = argv[i+1];
@@ -130,16 +106,19 @@ int main(int argc, char *argv[])
 
     if (bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0)
     {
-        ui_log("SERVER - bind failed\n");
+        ui_log("SERVER ERROR bind failed\n");
         return 1;
     }
 
 	// print startup status
-	ui_log("SERVER Listening for connections on port %d.\n", port);
+	ui_log("SERVER Listening for connections on port %d\n", port);
 	ui_log("SERVER Logging to file %s\n", log_file);
-	if (monitor_mode) {
-		ui_log("SERVER Running in monitor mode.\n");
-	}
+	if (monitor_mode)
+		ui_log("SERVER Running in monitor mode\n");
+	if (verbose_log)
+		ui_log("SERVER verbose logging on\n");
+	if (packet_log)
+		ui_log("SERVER packet logging on\n");
 
 	// init the display
 	display_init();
@@ -174,10 +153,11 @@ int main(int argc, char *argv[])
 			if (errno == EINTR)
 				continue;
 
-			ui_log("SERVER - select failed\n");
+			ui_log("SERVER ERROR select failed, main\n");
 			break;
 		}
 
+		
 		// update the HTML file with game status
 		update_games_html();
 
@@ -186,6 +166,9 @@ int main(int argc, char *argv[])
 			int c = getch();
 
 			switch(c) {
+				case 'r':
+					display_resize();
+					break;
 				case 'q':
 					running = false;
 					break;
@@ -200,9 +183,11 @@ int main(int argc, char *argv[])
 					break;
 				case 'v':
 					verbose_log = !verbose_log;
+					ui_log("SERVER verbose logging %s", (verbose_log ? "on" : "off"));
 					break;
 				case 'p':
 					packet_log = !packet_log;
+					ui_log("SERVER packet logging %s", (packet_log ? "on" : "off"));
 					break;
 			}
 		}
@@ -216,7 +201,7 @@ int main(int argc, char *argv[])
 
 			int recvfrom_ret = recvfrom(sockfd, buf, BUF_SIZE, 0, (struct sockaddr*)&cliaddr, &clilen);
 			if (recvfrom_ret < 0) {
-				ui_log("SERVER - recvfrom failed\n");
+				ui_log("SERVER ERROR recvfrom failed, main\n");
 				continue;
 			}
 

@@ -28,17 +28,17 @@ typedef struct CLIENT_T
 {
     struct sockaddr_in client_addr;
     time_t last_heard;
+    uint8_t player_num;
 } CLIENT_T;
 
 typedef struct GAME_STATE_T
 {
 	bool logon;                                         	// in logon phase?
-  uint8_t last_logon_plr;                             	// the last player to send logon packet
-  uint64_t logon_timer;                               	// logon countdown timer
-  uint64_t plr_logon_time[MAX_PLAYERS];                	// plr_logon_set timer countdown
+	uint64_t logon_timer;                               	// logon countdown timer
+	uint64_t plr_logon_time[MAX_PLAYERS];                	// plr_logon_set timer countdown
 	int8_t plr_data_recv[2][MAX_PLAYERS];              		// plr_data_recv for seq/player
 	uint8_t seq_plr_data[2][MAX_PLAYERS][BUF_SIZE];     	// seq/player data cache
-  uint64_t last_req_time[2][MAX_PLAYERS][MAX_PLAYERS];	// seq/player request from each player, for each player
+	uint64_t last_req_time[2][MAX_PLAYERS][MAX_PLAYERS];	// seq/player request from each player, for each player
 } GAME_STATE_T;
 
 typedef struct GAME_T
@@ -95,6 +95,7 @@ bool check_logon_sent(struct GAME_T *game, uint8_t plr);
 void process_logon_packet(struct GAME_T *game, uint8_t pnum, uint8_t *buf, uint32_t buff_size);
 void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, uint32_t buff_size);
 bool is_duplicate_data(const uint8_t *buf, uint8_t *cache);
+uint8_t calc_checksum(uint8_t *buf);
 void recalculate_checksum(uint8_t *buf);
 
 // mirror data to other players
@@ -107,7 +108,7 @@ uint8_t master_resend_data(struct GAME_T *game, uint8_t seq, uint8_t player_mask
 extern int sockfd;				// Socket File Descriptor
 extern bool monitor_mode;
 extern bool verbose_log;
-extern bool packet_log; 
+extern bool packet_log;
 extern FILE *fp;
 GAME_T *client_lookup(struct sockaddr_in *cliaddr, uint8_t *buf, uint8_t *pnum);
 

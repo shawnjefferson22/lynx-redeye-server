@@ -12,10 +12,14 @@ extern void ui_refresh();
 extern void ui_log(const char *fmt, ...);
 extern void clear_log();
 extern void draw_title();
+extern void draw_legend();
 extern void draw_log();
 extern void draw_game_stats();
 extern void draw_packet_stats();
 extern void draw_games();
+
+// handle terminal resize from main loop (manual redraw)
+extern void display_resize(void);
 
 // logging functions
 void util_dump_bytes(const uint8_t *buff, uint32_t buff_size);
