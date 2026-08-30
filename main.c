@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
 {
 	uint8_t buf[BUF_SIZE];				// packet buffer
 	struct GAME_T *g;
-    uint8_t pnum;						// player number
+    uint8_t cnum;						// player number
     //uint16_t gid;						// game id
     uint8_t i;
 	bool running;
@@ -230,8 +230,8 @@ int main(int argc, char *argv[])
 			/***************/
 			/* Game Lookup */
 			/***************/
-			g = client_lookup(&cliaddr, buf, &pnum);
-			if (!g || pnum == 255)							// something weird happened, either game not found, or player not found
+			g = client_lookup(&cliaddr, buf, &cnum);
+			if (!g || cnum == 255)							// something weird happened, either game not found, or player not found
 				continue;
 
 			/*****************/
@@ -239,7 +239,7 @@ int main(int argc, char *argv[])
 			/*****************/
 			if (!g->state.logon) {
 				while(1) {
-					process_game_packet(g, pnum, buf, buf[0]+2);
+					process_game_packet(g, cnum, buf, buf[0]+2);
 					if (!check_buffer_for_more(buf, recvfrom_ret))
 						break;
 					else
@@ -251,8 +251,9 @@ int main(int argc, char *argv[])
 				/* In Logon State */
 				/******************/
 				// logon ended, and game starting?
+				//ui_log("DEBUG logon_state:%d\n", g->state.logon);
 				if (check_logon_state(g))
-					process_logon_packet(g, pnum, buf, buf[0]+2);
+					process_logon_packet(g, cnum, buf, buf[0]+2);
 			}
 		}
 

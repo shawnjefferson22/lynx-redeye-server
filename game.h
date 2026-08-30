@@ -11,7 +11,7 @@
 #define MAX_PLAYERS			    16				// maximum players allowed in game
 #define LOGON_SUPPRESS      5         // number of logon messages to suppress
 #define REQ_BACKOFF_TIME    90        // time to suppress repeated data requests (msg 4)
-#define LOGON_BACKOFF_TIME  10        // time to suppress repeated logon packets
+#define LOGON_BACKOFF_TIME  500       // time to suppress repeated logon packets if my player number changed
 #define LOGON_DELAY         150       // logon countdown timer (for real mode)
 
 
@@ -29,13 +29,15 @@ typedef struct CLIENT_T
     struct sockaddr_in client_addr;
     time_t last_heard;
     uint8_t player_num;
+    int64_t player_num_change_timer;
+    bool player_num_changed;
 } CLIENT_T;
 
 typedef struct GAME_STATE_T
 {
 	bool logon;                                         	// in logon phase?
-	uint64_t logon_timer;                               	// logon countdown timer
-	uint64_t plr_logon_time[MAX_PLAYERS];                	// plr_logon_set timer countdown
+	int64_t logon_timer;                               	// end logon state countdown timer
+	//int64_t plr_logon_time[MAX_PLAYERS];                	// player number change timer countdown
 	int8_t plr_data_recv[2][MAX_PLAYERS];              		// plr_data_recv for seq/player
 	uint8_t seq_plr_data[2][MAX_PLAYERS][BUF_SIZE];     	// seq/player data cache
 	uint64_t last_req_time[2][MAX_PLAYERS][MAX_PLAYERS];	// seq/player request from each player, for each player
@@ -92,8 +94,8 @@ bool check_req_sent(struct GAME_T *game, uint8_t seq, uint8_t from_plr, uint8_t 
 bool check_logon_sent(struct GAME_T *game, uint8_t plr);
 
 // process game packets
-void process_logon_packet(struct GAME_T *game, uint8_t pnum, uint8_t *buf, uint32_t buff_size);
-void process_game_packet(struct GAME_T *game, uint8_t pnum, const uint8_t *buf, uint32_t buff_size);
+void process_logon_packet(struct GAME_T *game, uint8_t client_num, uint8_t *buf, uint32_t buff_size);
+void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t *buf, uint32_t buff_size);
 bool is_duplicate_data(const uint8_t *buf, uint8_t *cache);
 uint8_t calc_checksum(uint8_t *buf);
 void recalculate_checksum(uint8_t *buf);
