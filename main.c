@@ -183,11 +183,11 @@ int main(int argc, char *argv[])
 					break;
 				case 'v':
 					verbose_log = !verbose_log;
-					ui_log("SERVER verbose logging %s", (verbose_log ? "on" : "off"));
+					ui_log("SERVER verbose logging %s\n", (verbose_log ? "on" : "off"));
 					break;
 				case 'p':
 					packet_log = !packet_log;
-					ui_log("SERVER packet logging %s", (packet_log ? "on" : "off"));
+					ui_log("SERVER packet logging %s\n", (packet_log ? "on" : "off"));
 					break;
 			}
 		}

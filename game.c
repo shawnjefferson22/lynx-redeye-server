@@ -103,8 +103,6 @@ void reset_game_state(GAME_T *game)
 		game->client[i].player_num_change_timer = 0;
 		game->client[i].player_num_changed = false;
 
-		//game->state.plr_logon_time[i] = 0;
-
 		game->state.plr_data_recv[0][i] = 0;
 		game->state.plr_data_recv[1][i] = 0;
 		game->state.seq_plr_data[0][i][0] = 0;
@@ -122,7 +120,6 @@ void reset_game_state(GAME_T *game)
 	game->round_start = 0;
 	game->last_round_time = 0;
 	game->avg_round_time = 0;
-
 }
 
 
@@ -319,10 +316,10 @@ GAME_T *create_new_game(uint16_t game_id, struct sockaddr_in* addr)
   	reset_game_state(newgame);
 
   	/* DEBUGGING */
-  	//#ifdef DEBUG
+  	#ifdef DEBUG
   	ui_log("DEBUG new_game:%d %d %d\n", newgame->game_id, newgame->state.logon, newgame->num_players);
-  	//ui_log("DEBUG client[0] %f %s:%d\n", newgame->client[0].last_heard, inet_ntoa(newgame->client[0].client_addr.sin_addr), ntohs(newgame->client[0].client_addr.sin_port));
-	//#endif
+  	ui_log("DEBUG client[0] %llu %s:%d\n", newgame->client[0].last_heard, inet_ntoa(newgame->client[0].client_addr.sin_addr), ntohs(newgame->client[0].client_addr.sin_port));
+	#endif
 
   return(newgame);
 }
@@ -360,7 +357,7 @@ void join_game(GAME_T *game, struct sockaddr_in* addr)
  *
  * Iterate through the game list, sending this packet to the other clients in the game.
  */
-uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *packet, uint8_t psize)
+bool send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *packet, uint8_t psize)
 {
   uint8_t i;
   ssize_t sendto_ret;
@@ -421,7 +418,7 @@ void handle_client_timeout() {
 	if (!monitor_mode) {
     	for(i=0; i<g->num_players; i++) {
       		if ((t - g->client[i].last_heard) > CLIENT_TIMEOUT) {
-        		ui_log("SERVER handle_client_timeout, game:%04X client:%d lh:%ld\n", g->game_id, i, (t - g->client[i].last_heard));
+        		ui_log("SERVER handle_client_timeout, game:%04X client:%d player:%d lh:%ld\n", g->game_id, i, g->client[i].player_num, (t - g->client[i].last_heard));
         		for (j=i; j<g->num_players; j++) {
           			memcpy(&g->client[j], &g->client[j+1], sizeof(CLIENT_T));
         		}
@@ -459,6 +456,18 @@ void handle_client_timeout() {
 }
 
 
+uint8_t find_client_by_player_num(GAME_T* game, uint8_t player_num)
+{
+	for (uint8_t i = 0; i < game->num_players; i++) {
+		if (game->client[i].player_num == player_num) {
+			return i;
+		}
+	}
+
+	return 255; // Not found
+}
+
+
 /* check_data_recv
  *
  * Check that all players have sent data for full sequence
@@ -493,24 +502,6 @@ bool check_req_sent(struct GAME_T *game, uint8_t seq, uint8_t from_plr, uint8_t 
 }
 
 
-/* check_logon_sent
- *
- * checks if we have sent a request, and how long ago. Returns true if we should send/resend, false if not.
- *
- */
-/*
- bool check_logon_sent(struct GAME_T *game, uint8_t plr)
-{
-	uint64_t now = get_time_ms();
-
-	// have we sent this request yet?
-	if ((now - game->state.plr_logon_time[plr]) > LOGON_BACKOFF_TIME)
-		return true;
-	else
-		return false;
-}
-*/
-
 /* check_logon_state
  *
  * Check f we should still be in the logon state or not, and return true if so, false if not.
@@ -524,9 +515,9 @@ bool check_logon_state(struct GAME_T *game)
 	// Are we in logon timer countdown mode?
 	if (!monitor_mode && (game->state.logon_timer > 0)) {
 		uint64_t now = get_time_ms();
-		//#ifdef DEBUG
+		#ifdef DEBUG
 		ui_log("GAME #%d %04X %s --> game start countdown: %d\n", game->instance, game->game_id, *game->name, (now - game->state.logon_timer));
-		//#endif
+		#endif
 
 		if ((now - game->state.logon_timer) > LOGON_DELAY) {
 			game->state.logon = false;
@@ -571,7 +562,7 @@ void process_logon_packet(struct GAME_T *game, uint8_t client_num, uint8_t *buf,
 	}
 
 	if (packet_log)
-		print_logon_packet(buf, buff_size);
+		print_logon_packet(&game->client[client_num], buf, buff_size);
 
 	// Extract number of players logged in
 	msg = buf[1];
@@ -633,20 +624,6 @@ void process_logon_packet(struct GAME_T *game, uint8_t client_num, uint8_t *buf,
 				}
 			}
 
-			// Don't spam other players with logon messages (this seems to work very well)
-			/*
-			if (game->state.plr_logon_time[countdown]) {
-				game->state.plr_logon_time[countdown]--;
-				#ifdef DEBUG
-				ui_log("GAME #%d %04X %s --> suppressing logon message from %d\n", game->instance, game->game_id, *game->name, countdown);
-				#endif
-				return;
-			}
-			else {
-				game->state.plr_logon_time[countdown] = LOGON_SUPPRESS;
-			}
-			*/
-
 			break;
 	}
 
@@ -674,7 +651,7 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 	(void) buff_size;
 
 	if (packet_log)
-		print_game_packet(buf, realsize);
+		print_game_packet(&game->client[client_num], buf, realsize);
 
 	// What msg type is it?
 	switch(msg) {
@@ -751,33 +728,6 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 			ui_log("GAME #%d %04X %s --> REQUEST client %d for player %d seq %d - header:%08b\n", game->instance, game->game_id, *game->name,
 				client_num, plr, seq, buf[1]);
 
-			// Do we have the data at the server?
-			// FIXME: still haven't figured out how we determine at the server if we have valid data and not some duplicate, or delayed data packet
-			// FIXME: it seems we can never really know if we have valid data, so we are going to forward all requests
-
-			/*
-			if (game->state.plr_data_recv[seq][plr] == 1) {
-				if (verbose_log)
-					ui_log("GAME #%d %04X %s --> REQUEST player %d for player %d seq %d server has it - header:%08b\n", game->instance, game->game_id, *game->name,
-						pnum, plr, seq, buf[1]);
-
-				// FIXME: it doesn't seem possible to know for sure if we have valid data, so we will send the request to the target player
-				if (!monitor_mode) {
-					send_data_to_client(game, pnum, game->state.seq_plr_data[seq][plr], game->state.seq_plr_data[seq][plr][0]+2);
-					return;
-				}
-			}
-			else {
-				game->state.plr_data_recv[seq][plr] = -1;
-				if (verbose_log)
-					ui_log("GAME #%d %04X %s --> REQUEST player %d for player %d seq %d server doesn't have it - header:%08b\n", game->instance, game->game_id, *game->name,
-						pnum, plr, seq, buf[1]);
-				// just send request to player whose data is needed. not all players
-				send_data_to_client(game, plr, buf, realsize);
-				return;
-			}
-			*/
-
 			// just send request to player whose data is needed. not all players
 			if (!monitor_mode)
 				send_data_to_client(game, plr, buf, realsize);
@@ -790,12 +740,14 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 					plr, seq, buf[2]);
 
 			// Server can try to resend data as master
+			/* Let's not do this for now, as we don't know if we have the correct data, and it may be better to let the client resend the data
 			if (!monitor_mode) {
 				if (valid_sequence_data(game, seq, buf[2])) {
 					master_resend_data(game, seq, buf[2]);
 					return;
 				}
 			}
+			*/
 			break;
 	}
 
@@ -810,34 +762,39 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 
 /* send_data_to_client
  *
- * A resend request was seen, but we have the data, so we can just send it ourselves.
- * Don't send to the player whose data we requested.
+ * A resend request was seen, just send to the player requested.
  */
-uint8_t send_data_to_client(struct GAME_T *game, uint8_t req_player, const uint8_t *packet, uint8_t psize)
+bool send_data_to_client(struct GAME_T *game, uint8_t req_player, const uint8_t *packet, uint8_t psize)
 {
-  	//uint8_t i;
-  	ssize_t sendto_ret;
+   	ssize_t sendto_ret;
   	socklen_t clilen;
+	uint8_t client_num;
 
   	// Check valid game
   	if (!game)
-    	return(0);
+    	return(false);
 
-    clilen = sizeof(game->client[req_player].client_addr);
-	sendto_ret = sendto(sockfd, packet, psize, 0, (struct sockaddr*) &(game->client[req_player].client_addr), clilen);
+	client_num = find_client_by_player_num(game, req_player);
+	if (client_num == 255) {
+		ui_log("GAME #%d %04X %s --> ERROR send_data_to_client, player %d not found in game\n", game->instance, game->game_id, *game->name, req_player);
+		return(false);
+	}
+
+    clilen = sizeof(game->client[client_num].client_addr);
+	sendto_ret = sendto(sockfd, packet, psize, 0, (struct sockaddr*) &(game->client[client_num].client_addr), clilen);
 
 	// *** DEBUGGING ***
 	#ifdef DEBUG
-    ui_log("DEBUG sending to %s:%d ", inet_ntoa(game->client[req_player].client_addr.sin_addr), ntohs(game->client[req_player].client_addr.sin_port));
+    ui_log("DEBUG sending to %s:%d ", inet_ntoa(game->client[client_num].client_addr.sin_addr), ntohs(game->client[client_num].client_addr.sin_port));
     util_dump_bytes(packet, psize);
 	#endif
 
 	if (sendto_ret < 0) {
         ui_log("SERVER ERROR sendto failed, send_data_to_client\n");
-		return(0);
+		return(false);
     }
 
-  	return(1);
+  	return(true);
 }
 
 
@@ -851,7 +808,7 @@ bool valid_sequence_data(GAME_T *game, uint8_t seq, uint8_t player_mask)
 
 	// Check valid game
 	if (!game)
-		return(0);
+		return(false);
 
 	// iterate through player mask
 	plr = 0;

@@ -364,12 +364,12 @@ void util_dump_bytes(const uint8_t *buff, uint32_t buff_size)
 }
 
 
-void print_game_packet(const uint8_t *buff, uint32_t buff_size)
+void print_game_packet(CLIENT_T *client, const uint8_t *buff, uint32_t buff_size)
 {
     char line[256];
     uint32_t offset = 0;
 
-    offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG GAME PKT: ");
+    offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG Client %s:%d GAME PKT: ", inet_ntoa(client->client_addr.sin_addr), ntohs(client->client_addr.sin_port));
     // hex dump (single line)
     for (uint32_t j = 0; j < buff_size && offset < sizeof(line); j++) {
         offset += snprintf(line + offset, sizeof(line) - offset, "%02X ", buff[j]);
@@ -386,12 +386,12 @@ void print_game_packet(const uint8_t *buff, uint32_t buff_size)
 }
 
 
-void print_logon_packet(const uint8_t *buff, uint32_t buff_size)
+void print_logon_packet(CLIENT_T *client, const uint8_t *buff, uint32_t buff_size)
 {
     char line[256];
     uint32_t offset = 0;
 
-    offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG LOGON PKT: ");
+    offset += snprintf(line + offset, sizeof(line) - offset, "DEBUG Client %s:%d LOGON PKT: ", inet_ntoa(client->client_addr.sin_addr), ntohs(client->client_addr.sin_port));
     // hex dump (single line)
     for (uint32_t j = 0; j < buff_size && offset < sizeof(line); j++) {
         offset += snprintf(line + offset, sizeof(line) - offset, "%02X ", buff[j]);

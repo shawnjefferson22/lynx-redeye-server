@@ -23,8 +23,8 @@ extern void display_resize(void);
 
 // logging functions
 void util_dump_bytes(const uint8_t *buff, uint32_t buff_size);
-void print_game_packet(const uint8_t *buff, uint32_t buff_size);
-void print_logon_packet(const uint8_t *buff, uint32_t buff_size);
+void print_game_packet(CLIENT_T *client, const uint8_t *buff, uint32_t buff_size);
+void print_logon_packet(CLIENT_T *client, const uint8_t *buff, uint32_t buff_size);
 void print_stats();
 void print_game_clients();
 

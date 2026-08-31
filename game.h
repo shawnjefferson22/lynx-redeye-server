@@ -36,8 +36,7 @@ typedef struct CLIENT_T
 typedef struct GAME_STATE_T
 {
 	bool logon;                                         	// in logon phase?
-	int64_t logon_timer;                               	// end logon state countdown timer
-	//int64_t plr_logon_time[MAX_PLAYERS];                	// player number change timer countdown
+	int64_t logon_timer;                               	  // end logon state countdown timer
 	int8_t plr_data_recv[2][MAX_PLAYERS];              		// plr_data_recv for seq/player
 	uint8_t seq_plr_data[2][MAX_PLAYERS][BUF_SIZE];     	// seq/player data cache
 	uint64_t last_req_time[2][MAX_PLAYERS][MAX_PLAYERS];	// seq/player request from each player, for each player
@@ -80,6 +79,7 @@ GAME_T *find_game_by_client_address(struct sockaddr_in* addr);
 GAME_T *find_game_by_id(uint16_t id);
 uint8_t find_client_in_game(GAME_T *game, struct sockaddr_in* addr);
 uint8_t find_game_in_game_list(uint16_t gid);
+uint8_t find_client_by_player_num(GAME_T* game, uint8_t player_num);
 
 // join/create/remove/status of games
 GAME_T *create_new_game(uint16_t game_id, struct sockaddr_in* addr);
@@ -101,8 +101,8 @@ uint8_t calc_checksum(uint8_t *buf);
 void recalculate_checksum(uint8_t *buf);
 
 // mirror data to other players
-uint8_t send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *packet, uint8_t psize);
-uint8_t send_data_to_client(struct GAME_T *game, uint8_t req_player, const uint8_t *packet, uint8_t psize);
+bool send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *packet, uint8_t psize);
+bool send_data_to_client(struct GAME_T *game, uint8_t req_player, const uint8_t *packet, uint8_t psize);
 bool valid_sequence_data(GAME_T *game, uint8_t seq, uint8_t player_mask);
 uint8_t master_resend_data(struct GAME_T *game, uint8_t seq, uint8_t player_mask);
 
