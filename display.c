@@ -431,7 +431,6 @@ void print_game_clients()
     uint8_t i;
 
 
-
     g = games;
     while (g) {
         ui_log("GAME #%d %04X %s --> State logon:%d rounds:%ld avg_round_time:%ld\n", g->instance, g->game_id, *g->name,

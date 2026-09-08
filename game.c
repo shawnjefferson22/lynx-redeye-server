@@ -729,9 +729,10 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 				client_num, plr, seq, buf[1]);
 
 			// just send request to player whose data is needed. not all players
-			if (!monitor_mode)
+			if (!monitor_mode) {
 				send_data_to_client(game, plr, buf, realsize);
-			return;
+				return;
+			}
 			break;
 
 		case 5:		// Master Resend Req
