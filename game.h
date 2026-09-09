@@ -13,6 +13,7 @@
 #define REQ_BACKOFF_TIME    90        // time to suppress repeated data requests (msg 4)
 #define LOGON_BACKOFF_TIME  500       // time to suppress repeated logon packets if my player number changed
 #define LOGON_DELAY         150       // logon countdown timer (for real mode)
+#define LOGON_RESTART_BACKOFF 2000    // in game logon restart backoff timer (2 seconds)
 
 
 typedef struct STATS_T

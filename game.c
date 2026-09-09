@@ -513,7 +513,7 @@ bool check_req_sent(struct GAME_T *game, uint8_t seq, uint8_t from_plr, uint8_t 
 bool check_logon_state(struct GAME_T *game)
 {
 	// Are we in logon timer countdown mode?
-	if (!monitor_mode && (game->state.logon_timer > 0)) {
+	if (!monitor_mode && (game->state.logon_timer > 0) && game->state.logon) {
 		uint64_t now = get_time_ms();
 		#ifdef DEBUG
 		ui_log("GAME #%d %04X %s --> game start countdown: %d\n", game->instance, game->game_id, *game->name, (now - game->state.logon_timer));
@@ -521,7 +521,7 @@ bool check_logon_state(struct GAME_T *game)
 
 		if ((now - game->state.logon_timer) > LOGON_DELAY) {
 			game->state.logon = false;
-			game->state.logon_timer = 0;
+			game->state.logon_timer = get_time_ms();				// for logon restart backoff
 			game->game_start = get_time_ms();
 			game->round_start = get_time_ms();
 
@@ -552,10 +552,10 @@ void process_logon_packet(struct GAME_T *game, uint8_t client_num, uint8_t *buf,
 		return;
 
 	// is logon ended, and game starting?
-	if (!check_logon_state(game))
-		return;
+	//if (!check_logon_state(game))
+	//	return;
 
-	// Doesn't look like a logon packet
+	// Doesn't look like a logon packet, discard
 	if (buf[0] != 5) {
 		ui_log("GAME #%d %04X %s buf[0]:%d --> ERROR not a logon packet\n", game->instance, game->game_id, *game->name, buf[0]);
 		return;
@@ -591,6 +591,10 @@ void process_logon_packet(struct GAME_T *game, uint8_t client_num, uint8_t *buf,
 			break;
 
 		case 0:				// logon announcement packet
+			// is logon ended, and game starting? (ignore this stale logon packet)
+			if (!check_logon_state(game))
+				return;
+
 			if (game->num_players < plrs) {
 				ui_log("GAME #%d %04X %s --> Logon new player %d\n", game->instance, game->game_id, *game->name, plrnum);
 
@@ -656,7 +660,8 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 	// What msg type is it?
 	switch(msg) {
 		case 0:		// Logon packet
-			if ((buf[0] == 5) && (buf[1] == 0)) {		// looks like we're back in logon, pressed restart?
+			// Are we back in logon phase?  (possibly pressed restart, ignore stale packets for a time)
+			if ((buf[0] == 5) && (buf[1] == 0) && ((get_time_ms() - game->state.logon_timer) > LOGON_BACKOFF_TIME)) {		
 				reset_game_state(game);
 				ui_log("GAME #%d %04X %s --> RESTART logon packet received, back in logon mode\n", game->instance, game->game_id, *game->name);
 			}
@@ -677,7 +682,7 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 				memcpy(game->state.seq_plr_data[seq][plr], buf, realsize);
 
 				if (!monitor_mode)
-					game->client[client_num].player_num = plr;
+					game->client[client_num].player_num = plr;				// grab player number
 
 				if (verbose_log)
 					ui_log("GAME #%d %04X %s --> DATA player %d data for seq %d - header:%08b, data size:%d\n", game->instance, game->game_id, *game->name,
@@ -685,8 +690,8 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 			}
 
 			// How do we know if the data we are receiving is part of the "old" full sequence, or just data being resent by requests?
-			// I don't think we do, or can know due to resends and latency, so we have to relay the data to all players
-			// players who already have the data will ignore it
+			// I don't think we do, or can know due to resends and latency, so we have to relay the data to all players.
+			// Players who already have the data will ignore it
 			// Probably what we need to do is track request on the FN side, and don't resend a request for a certain amount of time
 			// if we don't receive data
 
@@ -714,7 +719,7 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 			break;
 
 		case 4:		// SendData Req
-			// Suppress repeated requests for data
+			// Suppress repeated requests for data, since it takes longer for the data to arrive through the server
 			if (!check_req_sent(game, seq, client_num, plr)) {
 				if (verbose_log)
 					ui_log("GAME #%d %04X %s --> REQUEST client %d for player %d seq %d - header:%08b - backoff:%ld\n", game->instance, game->game_id, *game->name,
