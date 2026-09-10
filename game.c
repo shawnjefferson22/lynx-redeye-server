@@ -551,10 +551,6 @@ void process_logon_packet(struct GAME_T *game, uint8_t client_num, uint8_t *buf,
 	if (!game->state.logon)
 		return;
 
-	// is logon ended, and game starting?
-	//if (!check_logon_state(game))
-	//	return;
-
 	// Doesn't look like a logon packet, discard
 	if (buf[0] != 5) {
 		ui_log("GAME #%d %04X %s buf[0]:%d --> ERROR not a logon packet\n", game->instance, game->game_id, *game->name, buf[0]);
@@ -584,7 +580,8 @@ void process_logon_packet(struct GAME_T *game, uint8_t client_num, uint8_t *buf,
 
 				ui_log("GAME #%d %04X %s --> Logon ended, game starting. players: %d\n", game->instance, game->game_id, *game->name, game->num_players);
 			}
-			else {		// set a timer for game starting
+			else {		// set a timer for game starting (in case we miss any countdown packets)
+				game->num_players = plrs;							// message 2 is definite number of players
 				if (game->state.logon_timer == 0)
 					game->state.logon_timer = get_time_ms();
 			}
@@ -665,12 +662,15 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 				reset_game_state(game);
 				ui_log("GAME #%d %04X %s --> RESTART logon packet received, back in logon mode\n", game->instance, game->game_id, *game->name);
 			}
+			else
+				ui_log("GAME #%d %04X %s --> logon packet received from player %d, but in backoff period\n", game->instance, game->game_id, *game->name, game->client[client_num].player_num);
 			return;
 			break;
 
 		case 3:		// Data packet
 			// Have we already seen this data? If so, don't store in server cache again.
 			// This should perserve the data we already have
+			// This is mainly for debugging and sequence timing estimates, we can't know for certain what a lynx state is
 			if ((game->state.plr_data_recv[seq][plr] == 1) && is_duplicate_data(buf, game->state.seq_plr_data[seq][plr])) {
 				if (verbose_log)
 					ui_log("GAME #%d %04X %s --> DATA duplicate player %d data for seq %d - header:%08b, data size:%d\n", game->instance, game->game_id, *game->name,
@@ -682,18 +682,12 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 				memcpy(game->state.seq_plr_data[seq][plr], buf, realsize);
 
 				if (!monitor_mode)
-					game->client[client_num].player_num = plr;				// grab player number
+					game->client[client_num].player_num = plr;				// grab player number for this client
 
 				if (verbose_log)
 					ui_log("GAME #%d %04X %s --> DATA player %d data for seq %d - header:%08b, data size:%d\n", game->instance, game->game_id, *game->name,
 						plr, seq, buf[1], buf[0]);
 			}
-
-			// How do we know if the data we are receiving is part of the "old" full sequence, or just data being resent by requests?
-			// I don't think we do, or can know due to resends and latency, so we have to relay the data to all players.
-			// Players who already have the data will ignore it
-			// Probably what we need to do is track request on the FN side, and don't resend a request for a certain amount of time
-			// if we don't receive data
 
 			// This works for now to roughly compute the full sequence time, but doesn't really allow us to send data to a MSG type 4
 			// request, as we may not have the correct data.
@@ -744,16 +738,12 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 			if (verbose_log)
 				ui_log("GAME #%d %04X %s --> REQUEST Master resend request by player %d, seq %d, player mask %08b\n", game->instance, game->game_id, *game->name,
 					plr, seq, buf[2]);
-
-			// Server can try to resend data as master
-			/* Let's not do this for now, as we don't know if we have the correct data, and it may be better to let the client resend the data
+			
+			// send just to master, no one else can act on it
 			if (!monitor_mode) {
-				if (valid_sequence_data(game, seq, buf[2])) {
-					master_resend_data(game, seq, buf[2]);
-					return;
-				}
+				send_data_to_client(game, 0, buf, realsize);
+				return;
 			}
-			*/
 			break;
 	}
 
