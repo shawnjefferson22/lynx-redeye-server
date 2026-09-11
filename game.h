@@ -6,10 +6,10 @@
 
 #define BUF_SIZE	      	  32				// packet buffer size
 #define MAX_PKT_SIZE		    16				// max packet size we're handling (may need to go higher?)
-#define CLIENT_TIMEOUT  	  5         // client timeout client interval (seconds)
+#define CLIENT_TIMEOUT  	  5*1000    // client timeout client interval (seconds)
 #define NUM_GAMES 			    42			  // number of games in the game list
 #define MAX_PLAYERS			    16				// maximum players allowed in game
-#define LOGON_SUPPRESS      5         // number of logon messages to suppress
+#define LOGON_SUPPRESS      10         // number of logon messages to suppress
 #define REQ_BACKOFF_TIME    90        // time to suppress repeated data requests (msg 4)
 #define LOGON_BACKOFF_TIME  500       // time to suppress repeated logon packets if my player number changed
 #define LOGON_DELAY         150       // logon countdown timer (for real mode)
@@ -28,7 +28,7 @@ typedef struct STATS_T
 typedef struct CLIENT_T
 {
     struct sockaddr_in client_addr;
-    time_t last_heard;
+    int64_t last_heard;
     uint8_t player_num;
     int64_t player_num_change_timer;
     bool player_num_changed;
@@ -71,9 +71,9 @@ extern struct GAME_T *games;              // games being played
 extern struct GAME_LIST_T game_list[];  	// game list for name, max players
 extern struct STATS_T stats;  	          // global packet statistics
 
-// helper to count bits
+// helpers
 int popcount(uint8_t bits);
-
+uint64_t get_time_ms();
 
 // game list searching
 GAME_T *find_game_by_client_address(struct sockaddr_in* addr);
@@ -105,7 +105,7 @@ void recalculate_checksum(uint8_t *buf);
 bool send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *packet, uint8_t psize);
 bool send_data_to_client(struct GAME_T *game, uint8_t req_player, const uint8_t *packet, uint8_t psize);
 bool valid_sequence_data(GAME_T *game, uint8_t seq, uint8_t player_mask);
-uint8_t master_resend_data(struct GAME_T *game, uint8_t seq, uint8_t player_mask);
+void send_countdown_packets(GAME_T *game, uint8_t pnum);
 
 // defined in main.c
 extern int sockfd;				// Socket File Descriptor

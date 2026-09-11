@@ -209,6 +209,7 @@ int main(int argc, char *argv[])
 	    	ui_log("DEBUG Received packet from %s:%d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
         	util_dump_bytes(buf, recvfrom_ret);
 			#endif
+			
 
 			// sanity check on the packet length (more than 16 bytes? or less than 3 bytes?)
 			if ((buf[0] > MAX_PKT_SIZE) || ((recvfrom_ret < 3) || (recvfrom_ret > MAX_PKT_SIZE))) {
@@ -252,7 +253,7 @@ int main(int argc, char *argv[])
 				/******************/
 				// logon ended, and game starting?
 				//ui_log("DEBUG logon_state:%d\n", g->state.logon);
-				if (check_logon_state(g))
+				//if (check_logon_state(g))
 					process_logon_packet(g, cnum, buf, buf[0]+2);
 			}
 		}
@@ -328,13 +329,11 @@ GAME_T *client_lookup(struct sockaddr_in *cliaddr, uint8_t *buf, uint8_t *pnum)
 		if (*pnum == 255)							// client not found in game (something weird happened)
 			return(g);								// back to beginning of loop, discard this packet
 
-		time_t t = time(NULL);
-		g->client[*pnum].last_heard = t;			// record last heard time
+		g->client[*pnum].last_heard = get_time_ms();			// record last heard time
 	}
-	else {											// monitor mode case
-		time_t t = time(NULL);
-		*pnum = 0;									// there can be only one client
-		g->client[*pnum].last_heard = t;			// record last heard time
+	else {														// monitor mode case
+		*pnum = 0;												// there can be only one client
+		g->client[*pnum].last_heard = get_time_ms();			// record last heard time
 	}
 
 	return(g);

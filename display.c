@@ -437,10 +437,9 @@ void print_game_clients()
                 g->state.logon, g->rounds, g->avg_round_time);
 
         for(i=0; i<g->num_players; i++) {
-            time_t t = time(NULL);
             ui_log("GAME #%d %04X %s --> Client:%d %s:%d player_num: %d last_heard:%d recv_data:%d:%d\n", g->instance, g->game_id, *g->name, i,
                     inet_ntoa(g->client[i].client_addr.sin_addr), ntohs(g->client[i].client_addr.sin_port), g->client[i].player_num,
-                    (t - g->client[i].last_heard), g->state.plr_data_recv[0][i], g->state.plr_data_recv[1][i]);
+                    (get_time_ms() - g->client[i].last_heard), g->state.plr_data_recv[0][i], g->state.plr_data_recv[1][i]);
         }
         g = g->next;
     }

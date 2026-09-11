@@ -344,7 +344,7 @@ void join_game(GAME_T *game, struct sockaddr_in* addr)
   // Don't allow a client to join a game in progress, must be in logon phase
   if (game->state.logon) {
     	memcpy((void *) &(game->client[game->num_players].client_addr), (void *) addr, sizeof(struct sockaddr_in));
-		game->client[game->num_players].last_heard = time(NULL);
+		game->client[game->num_players].last_heard = get_time_ms();
 		game->client[game->num_players].player_num = 0;
 		game->client[game->num_players].player_num_change_timer = 0;
 		game->client[game->num_players].player_num_changed = false;
@@ -375,11 +375,11 @@ bool send_to_other_clients(struct GAME_T *game, uint8_t sender, const uint8_t *p
   // iterate through client list
   for(i=0; i<game->num_players; i++) {
     if (i != sender) {	 					// don't send to the original sender
-      	clilen = sizeof(game->client[i].client_addr);
+ 		clilen = sizeof(game->client[i].client_addr);
 	    sendto_ret = sendto(sockfd, packet, psize, 0, (struct sockaddr*) &(game->client[i].client_addr), clilen);
 
 	    #ifdef DEBUG
-      	ui_log("DEBUG Sending to %s:%d ", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
+      	ui_log("DEBUG Sending to %s:%d player_num: %d", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port), game->client[i].player_num);
       	util_dump_bytes(packet, psize);
 		#endif
 
@@ -407,18 +407,15 @@ void handle_client_timeout() {
   GAME_T *g;
   GAME_T *lg;       // pointer to previous game
   uint8_t i,j;
-  time_t t;       	// time interval to now
 
-
-  t = time(NULL);
 
   // Walk the games list, determine which clients to remove and prune empty games
   g = lg = games;
   while (g) {
 	if (!monitor_mode) {
     	for(i=0; i<g->num_players; i++) {
-      		if ((t - g->client[i].last_heard) > CLIENT_TIMEOUT) {
-        		ui_log("SERVER handle_client_timeout, game:%04X client:%d player:%d lh:%ld\n", g->game_id, i, g->client[i].player_num, (t - g->client[i].last_heard));
+      		if ((get_time_ms() - g->client[i].last_heard) > CLIENT_TIMEOUT) {
+        		ui_log("SERVER handle_client_timeout, game:%04X client:%d player:%d lh:%ld\n", g->game_id, i, g->client[i].player_num, (get_time_ms() - g->client[i].last_heard));
         		for (j=i; j<g->num_players; j++) {
           			memcpy(&g->client[j], &g->client[j+1], sizeof(CLIENT_T));
         		}
@@ -428,7 +425,7 @@ void handle_client_timeout() {
       	}
     }
 	else {
-		if ((t - g->client[0].last_heard) > CLIENT_TIMEOUT) {
+		if ((get_time_ms() - g->client[0].last_heard) > CLIENT_TIMEOUT) {
 			g->num_players = 0;
 		}
 	}
@@ -510,7 +507,8 @@ bool check_req_sent(struct GAME_T *game, uint8_t seq, uint8_t from_plr, uint8_t 
  * logon mode to game mode after the timer expires.
  *
  */
-bool check_logon_state(struct GAME_T *game)
+/*
+ bool check_logon_state(struct GAME_T *game)
 {
 	// Are we in logon timer countdown mode?
 	if (!monitor_mode && (game->state.logon_timer > 0) && game->state.logon) {
@@ -521,7 +519,7 @@ bool check_logon_state(struct GAME_T *game)
 
 		if ((now - game->state.logon_timer) > LOGON_DELAY) {
 			game->state.logon = false;
-			game->state.logon_timer = get_time_ms();				// for logon restart backoff
+			//game->state.logon_timer = get_time_ms();				// for logon restart backoff
 			game->game_start = get_time_ms();
 			game->round_start = get_time_ms();
 
@@ -532,7 +530,7 @@ bool check_logon_state(struct GAME_T *game)
 
 	return(true);
 }
-
+*/
 
 /* process_logon_packet
  *
@@ -553,7 +551,8 @@ void process_logon_packet(struct GAME_T *game, uint8_t client_num, uint8_t *buf,
 
 	// Doesn't look like a logon packet, discard
 	if (buf[0] != 5) {
-		ui_log("GAME #%d %04X %s buf[0]:%d --> ERROR not a logon packet\n", game->instance, game->game_id, *game->name, buf[0]);
+		if (verbose_log)
+			ui_log("GAME #%d %04X %s buf[0]:%d --> ERROR not a logon packet\n", game->instance, game->game_id, *game->name, buf[0]);
 		return;
 	}
 
@@ -582,15 +581,19 @@ void process_logon_packet(struct GAME_T *game, uint8_t client_num, uint8_t *buf,
 			}
 			else {		// set a timer for game starting (in case we miss any countdown packets)
 				game->num_players = plrs;							// message 2 is definite number of players
-				if (game->state.logon_timer == 0)
-					game->state.logon_timer = get_time_ms();
+				send_countdown_packets(game, game->client[client_num].player_num);				// send countdown packets to clients
+				game->state.logon = false;
+				game->state.logon_timer = get_time_ms();		// for logon restart backoff
+				game->game_start = get_time_ms();
+				game->round_start = get_time_ms();		
+				return;				
 			}
 			break;
 
 		case 0:				// logon announcement packet
 			// is logon ended, and game starting? (ignore this stale logon packet)
-			if (!check_logon_state(game))
-				return;
+			//if (!check_logon_state(game))
+			//	return;
 
 			if (game->num_players < plrs) {
 				ui_log("GAME #%d %04X %s --> Logon new player %d\n", game->instance, game->game_id, *game->name, plrnum);
@@ -658,11 +661,12 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 	switch(msg) {
 		case 0:		// Logon packet
 			// Are we back in logon phase?  (possibly pressed restart, ignore stale packets for a time)
-			if ((buf[0] == 5) && (buf[1] == 0) && ((get_time_ms() - game->state.logon_timer) > LOGON_BACKOFF_TIME)) {		
+			if ((buf[0] == 5) && (buf[1] == 0) && ((get_time_ms() - game->state.logon_timer) > LOGON_RESTART_BACKOFF)) {		
 				reset_game_state(game);
 				ui_log("GAME #%d %04X %s --> RESTART logon packet received, back in logon mode\n", game->instance, game->game_id, *game->name);
 			}
 			else
+				if (verbose_log)
 				ui_log("GAME #%d %04X %s --> logon packet received from player %d, but in backoff period\n", game->instance, game->game_id, *game->name, game->client[client_num].player_num);
 			return;
 			break;
@@ -745,6 +749,9 @@ void process_game_packet(struct GAME_T *game, uint8_t client_num, const uint8_t 
 				return;
 			}
 			break;
+
+		default:
+			return;
 	}
 
 	/*******************/
@@ -825,52 +832,6 @@ bool valid_sequence_data(GAME_T *game, uint8_t seq, uint8_t player_mask)
 }
 
 
-/* master_resend_data
- *
- * We can handle the master resend request at the server.
- */
-uint8_t master_resend_data(struct GAME_T *game, uint8_t seq, uint8_t player_mask)
-{
-	uint8_t i, plr;
-	ssize_t sendto_ret;
-	socklen_t clilen;
-
-	// Check valid game
-	if (!game)
-		return(0);
-
-	// iterate through player mask
-	plr = 0;
-	while (player_mask) {
-		// need to resend for this player?
-		if ((player_mask & 0x01) && (plr < game->num_players)) {
-			// send to players loop
-			for(i=0; i<game->num_players; i++) {
-    			if (i > 0) {	 					// don't send to the master (as we're pretending to be master)
-      				clilen = sizeof(game->client[i].client_addr);
-	    			sendto_ret = sendto(sockfd, game->state.seq_plr_data[seq][plr], game->state.seq_plr_data[seq][plr][0]+2, 0, (struct sockaddr*) &(game->client[i].client_addr), clilen);
-
-	    			// *** DEBUGGING ***
-	    			#ifdef DEBUG
-      				ui_log("DEBUG master resending to %s:%d ", inet_ntoa(game->client[i].client_addr.sin_addr), ntohs(game->client[i].client_addr.sin_port));
-      				util_dump_bytes(game->state.seq_plr_data[seq][plr], game->state.seq_plr_data[seq][plr][0]+2);
-					#endif
-
-	    			if (sendto_ret < 0) {
-        				ui_log("SERVER ERROR sendto failed, master_resend_data\n");
-      				}
-    			}
-			}
-  		}
-
-   		player_mask = player_mask >> 1;		// next bit in mask
-   		plr++;								// increment player #
-	}
-
-  return(1);
-}
-
-
 /* Calculate checksum of redeye packet, return true if good, false if not
  *
  * Checksum calculation is 255 - size, message
@@ -923,4 +884,40 @@ void recalculate_checksum(uint8_t *buf)
     // set new checksum on packet
     buf[size+1] = (ck & 0xFF);
     return;
+}
+
+
+/* send_countdown_packets
+ *
+ * Send a countdown packet to clients, so they know it's time to end logon.
+ *
+ * DEBUG LOGON PKT: 05 02 08 03 13 13 C7 - Msg=02 Plrs=2 countdown=8
+ */
+void send_countdown_packets(GAME_T *game, uint8_t pnum)
+{
+	uint8_t buf[7];		// temporary logon packet buffer
+	uint8_t pmask = 0;	// player mask
+	uint8_t i, cnum;
+
+	// build player mask
+	pmask = (1U << game->num_players) - 1;
+
+	// Build the logon packet
+	buf[0] = 0x05;								// payload size
+	buf[1] = 0x02;								// message type - logon ending packet
+	buf[2] = 9;									// countdown
+	buf[3] = pmask;								// num_players
+	buf[4] = game->game_id & 0xFF;				// game ID
+	buf[5] = (game->game_id >> 8) & 0xFF;
+	buf[6] = 0;									// checksum
+
+	// send countdown packets to all other clients in the game
+	for (i=4; i>0; i--) {
+		buf[2] = i;								// countdown
+		recalculate_checksum(&buf[0]);
+		ui_log("GAME #%d %04X %s --> Sending countdown packet:%d, pnum:%d\n", game->instance, game->game_id, *game->name, i, pnum);
+		cnum = find_client_by_player_num(game, pnum);
+		if (cnum != 255)
+			send_to_other_clients(game, cnum, buf, 7);	
+	}
 }
