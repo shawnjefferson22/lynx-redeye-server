@@ -205,11 +205,11 @@ int main(int argc, char *argv[])
 				continue;
 			}
 
-    		#ifdef DEBUG
+    		//#ifdef DEBUG
 	    	ui_log("DEBUG Received packet from %s:%d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
         	util_dump_bytes(buf, recvfrom_ret);
-			#endif
-			
+			//#endif
+
 
 			// sanity check on the packet length (more than 16 bytes? or less than 3 bytes?)
 			if ((buf[0] > MAX_PKT_SIZE) || ((recvfrom_ret < 3) || (recvfrom_ret > MAX_PKT_SIZE))) {
@@ -254,7 +254,7 @@ int main(int argc, char *argv[])
 				// logon ended, and game starting?
 				//ui_log("DEBUG logon_state:%d\n", g->state.logon);
 				//if (check_logon_state(g))
-					process_logon_packet(g, cnum, buf, buf[0]+2);
+				process_logon_packet(g, cnum, buf, buf[0]+2);
 			}
 		}
 

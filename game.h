@@ -6,7 +6,7 @@
 
 #define BUF_SIZE	      	  32				// packet buffer size
 #define MAX_PKT_SIZE		    16				// max packet size we're handling (may need to go higher?)
-#define CLIENT_TIMEOUT  	  5*1000    // client timeout client interval (seconds)
+#define CLIENT_TIMEOUT  	  30*1000    // client timeout client interval (seconds)
 #define NUM_GAMES 			    42			  // number of games in the game list
 #define MAX_PLAYERS			    16				// maximum players allowed in game
 #define LOGON_SUPPRESS      10         // number of logon messages to suppress
